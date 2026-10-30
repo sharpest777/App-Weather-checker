@@ -1,0 +1,45 @@
+# Každé 2 hodiny stáhne textové předpovědi ČHMÚ a nasadí appku na GitHub Pages.
+# Data se necommitují do repozitáře, přibalí se jen k nasazené stránce.
+name: Nasazení a data ČHMÚ
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stáhnout předpovědi ČHMÚ
+        shell: pwsh
+        run: ./scripts/fetch-chmi.ps1 -OutFile ./data/chmi.json
+
+      - name: Připravit web
+        run: |
+          mkdir -p _site/data
+          cp index.html app.js styles.css manifest.webmanifest icon.svg _site/
+          cp data/chmi.json _site/data/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

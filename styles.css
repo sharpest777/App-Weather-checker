@@ -1,0 +1,145 @@
+:root {
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #2563eb;
+  --c-yr: #2563eb;
+  --c-icon: #ea580c;
+  --c-ecmwf: #059669;
+  --c-rain: #93c5fd;
+  --radius: 14px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #334155;
+    --accent: #60a5fa;
+    --c-yr: #60a5fa;
+    --c-icon: #fb923c;
+    --c-ecmwf: #34d399;
+    --c-rain: #1d4ed8;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+a { color: var(--accent); }
+h2 { font-size: 1rem; margin: 0 0 .75rem; }
+.muted { color: var(--muted); }
+
+.top, main, .foot {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.top { padding-top: 16px; display: grid; gap: 10px; }
+
+.places { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.search { position: relative; }
+.search input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+.search-results {
+  position: absolute;
+  z-index: 10;
+  left: 0; right: 0; top: calc(100% + 4px);
+  margin: 0; padding: 4px 0;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .15);
+}
+.search-results li { padding: 8px 14px; cursor: pointer; }
+.search-results li:hover, .search-results li:focus { background: var(--bg); outline: none; }
+.search-results small { color: var(--muted); }
+
+main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  border: 1px solid var(--line);
+}
+
+/* Aktuální stav */
+.now-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.now-place { font-size: 1.15rem; font-weight: 600; }
+.now-main { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.now-emoji { font-size: 3rem; line-height: 1; }
+.now-temp { font-size: 3rem; font-weight: 600; line-height: 1; }
+.now-desc { color: var(--muted); }
+.models { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .95rem; }
+.agree { margin-top: 8px; font-size: .9rem; }
+
+/* Graf */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.dot.yr { background: var(--c-yr); }
+.dot.icon { background: var(--c-icon); }
+.dot.ecmwf { background: var(--c-ecmwf); }
+.bar { display: inline-block; width: 8px; height: 10px; background: var(--c-rain); margin-right: 5px; vertical-align: middle; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--muted); font-size: 11px; }
+.chart .grid { stroke: var(--line); }
+
+/* Dny */
+.days { display: grid; gap: 10px; }
+.day { border-top: 1px solid var(--line); padding-top: 10px; }
+.day:first-child { border-top: 0; padding-top: 0; }
+.day-name { font-weight: 600; margin-bottom: 4px; }
+.day-rows { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: .95rem; }
+.src { color: var(--muted); }
+.src.yr { color: var(--c-yr); }
+.src.icon { color: var(--c-icon); }
+.src.ecmwf { color: var(--c-ecmwf); }
+.rain { color: var(--muted); }
+
+/* ČHMÚ */
+.chmi-block { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.chmi-block:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.chmi-block h3 { font-size: .95rem; margin: 0 0 4px; }
+.chmi-block p { margin: 4px 0; }
+.chmi-intro { font-weight: 600; }
+.chmi-meta { font-size: .85rem; }
+
+.error { color: #dc2626; }
+
+.foot { font-size: .85rem; color: var(--muted); padding-bottom: 24px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }

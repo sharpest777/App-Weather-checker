@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Počasí – srovnání předpovědí</title>
+  <meta name="description" content="Předpověď počasí z yr.no, německého modelu ICON, ECMWF a textová předpověď ČHMÚ na jednom místě.">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Počasí">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="places" role="group" aria-label="Výběr místa">
+      <button type="button" class="chip" data-city="praha">Praha</button>
+      <button type="button" class="chip" data-city="brno">Brno</button>
+      <button type="button" class="chip" data-city="ostrava">Ostrava</button>
+      <button type="button" class="chip" id="geo-btn" title="Použít moji polohu">📍 Poloha</button>
+    </div>
+    <div class="search">
+      <input id="search" type="search" placeholder="Hledat místo…" autocomplete="off" aria-label="Hledat místo">
+      <ul id="search-results" class="search-results" hidden></ul>
+    </div>
+  </header>
+
+  <main>
+    <section id="now" class="card now" aria-live="polite">
+      <p class="muted">Načítám…</p>
+    </section>
+
+    <section class="card">
+      <h2>Příštích 48 hodin</h2>
+      <div class="legend">
+        <span><i class="dot yr"></i>yr.no</span>
+        <span><i class="dot icon"></i>ICON (DWD)</span>
+        <span><i class="dot ecmwf"></i>ECMWF</span>
+        <span><i class="bar"></i>srážky yr.no</span>
+      </div>
+      <div id="chart" class="chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>Dny</h2>
+      <div id="days" class="days"></div>
+    </section>
+
+    <section class="card">
+      <h2>Textová předpověď ČHMÚ</h2>
+      <div id="chmi"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>
+      Data: <a href="https://www.met.no/" rel="noopener">MET Norway (yr.no)</a>,
+      modely ICON a ECMWF přes <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (CC BY 4.0),
+      textová předpověď <a href="https://opendata.chmi.cz/" rel="noopener">ČHMÚ – otevřená data</a>.
+    </p>
+    <p><button type="button" id="refresh" class="link">Obnovit data</button> · <span id="updated"></span></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
