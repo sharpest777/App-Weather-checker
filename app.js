@@ -204,9 +204,9 @@ function findRegion(chmi, loc) {
 
 // Popisky podle toho, odkud předpověď pochází
 const SOURCES = [
-  { id: 'yr', label: 'NOR · yr.no', title: 'Norský meteorologický ústav (MET Norway), yr.no' },
-  { id: 'icon', label: 'GER · DWD', title: 'Německá meteorologická služba (DWD), model ICON' },
-  { id: 'ecmwf', label: 'EU · ECMWF', title: 'Evropské centrum pro střednědobé předpovědi (ECMWF)' },
+  { id: 'yr', label: 'NOR', title: 'Norský meteorologický ústav (MET Norway), yr.no' },
+  { id: 'icon', label: 'GER', title: 'Německá meteorologická služba (DWD), model ICON' },
+  { id: 'ecmwf', label: 'EU', title: 'Evropské centrum pro střednědobé předpovědi (ECMWF)' },
 ];
 const srcTag = (s) => `<span class="src ${s.id}" title="${esc(s.title)}">${s.label}</span>`;
 
@@ -232,6 +232,13 @@ const WINDS = [
   { id: 'slaby', label: 'Slabý', from: 0 },
   { id: 'stredni', label: 'Střední', from: 4 },
   { id: 'silny', label: 'Silný', from: 8 },
+];
+
+// Srážky v mm za hodinu: slabé do 2,5, střední do 8, slejvák od 8 (pod 0,1 mm = bez srážek)
+const RAINS = [
+  { id: 'slabe', label: 'Slabé', from: 0.1 },
+  { id: 'stredni', label: 'Střední', from: 2.5 },
+  { id: 'slejvak', label: 'Slejvák', from: 8 },
 ];
 
 const levelOf = (scale, value) => scale.reduce((hit, lvl) => (value >= lvl.from ? lvl : hit), scale[0]);
@@ -267,6 +274,19 @@ function renderGauges(cur) {
       </div>`;
   }
 
+  let rainHtml = '';
+  if (cur.rain != null) {
+    const r = cur.rain >= RAINS[0].from ? levelOf(RAINS, cur.rain) : null;
+    rainHtml = `
+      <div class="gauge">
+        <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>
+        <div class="gauge-body">
+          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(cur.rain)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span></div>
+          ${meter(RAINS, r, '--c-rainmeter')}
+        </div>
+      </div>`;
+  }
+
   return `
     <div class="gauges">
       <div class="gauge">
@@ -277,6 +297,7 @@ function renderGauges(cur) {
         </div>
       </div>
       ${windHtml}
+      ${rainHtml}
     </div>`;
 }
 
