@@ -254,7 +254,10 @@ function meter(scale, active, color) {
   </div>`;
 }
 
-function renderGauges(cur) {
+// Šipka větru je oranžová, když je den teplý (nejvyšší denní teplota aspoň tolik °C), jinak modrá
+const WARM_DAY_FROM = 15;
+
+function renderGauges(cur, dayMax) {
   if (cur.temp == null) return '';
   const feels = feelsLike(cur.temp, cur.wind);
   const cloth = levelOf(CLOTHES, feels);
@@ -264,8 +267,9 @@ function renderGauges(cur) {
   if (cur.wind != null) {
     const w = levelOf(WINDS, cur.wind);
     // Šipka ukazuje, kam vítr fouká (opačně než směr, odkud fouká)
+    const warm = (dayMax ?? cur.temp) >= WARM_DAY_FROM;
     const arrow = cur.dir != null
-      ? `<svg class="gauge-icon" viewBox="0 0 24 24" style="transform: rotate(${cur.dir + 180}deg)" aria-hidden="true"><path d="M12 3l5 9h-3.5v9h-3v-9H7z"/></svg>`
+      ? `<svg class="gauge-icon wind-arrow ${warm ? 'warm' : 'cold'}" viewBox="0 0 24 24" style="transform: rotate(${cur.dir + 180}deg)" role="img" aria-label="${warm ? 'teplý' : 'chladný'} vítr"><title>${warm ? 'Teplý' : 'Chladný'} den</title><path d="M12 3l5 9h-3.5v9h-3v-9H7z"/></svg>`
       : '';
     windHtml = `
       <div class="gauge">
@@ -308,6 +312,9 @@ function renderNow(loc, data, region, tz) {
   const key = hourKey(new Date(), tz);
   const cur = Object.fromEntries(SOURCES.map((s) => [s.id, data[s.id]?.hourly.get(key)]));
   const main = cur.yr || cur.icon || cur.ecmwf;
+  // Denní maximum z modelů s celým dnem (yr.no má pro dnešek jen zbývající hodiny)
+  const today = dayOf(key);
+  const dayMax = [data.icon, data.ecmwf, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
   const regionName = region && regionLabel(region) !== loc.name ? regionLabel(region) : '';
 
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
@@ -333,7 +340,7 @@ function renderNow(loc, data, region, tz) {
             <div class="now-desc">${esc(main.symbol.text)}</div>
           </div>
         </div>
-        ${renderGauges(main)}
+        ${renderGauges(main, dayMax)}
       </div>
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}

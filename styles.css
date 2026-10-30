@@ -117,6 +117,8 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .gauge { display: flex; align-items: center; gap: 10px; }
 .gauge-icon { width: 34px; height: 34px; flex: none; fill: var(--text); transition: transform .4s; }
 .gauge-icon.outline { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.wind-arrow.cold { fill: #2563eb; }
+.wind-arrow.warm { fill: #ea580c; }
 .gauge-body { flex: 1; min-width: 0; }
 .gauge-title { font-size: .95rem; margin-bottom: 4px; }
 .meter { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
