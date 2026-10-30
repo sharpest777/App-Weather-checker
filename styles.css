@@ -119,6 +119,19 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .chart text { fill: var(--muted); font-size: 11px; }
 .chart .grid { stroke: var(--line); }
 
+/* Radar */
+.radar { height: 340px; border-radius: 10px; overflow: hidden; background: var(--bg); }
+.radar-controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.radar-controls .chip { padding: 4px 12px; min-width: 44px; }
+.radar-controls input { flex: 1; accent-color: var(--accent); }
+.radar-time { font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.radar-note { font-size: .8rem; margin: 6px 0 0; }
+.leaflet-container { font: inherit; }
+@media (prefers-color-scheme: dark) {
+  /* Tmavá podkladová mapa – radar zůstává v původních barvách */
+  .radar .leaflet-tile-pane .basemap { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+}
+
 /* Dny */
 .days { display: grid; gap: 10px; }
 .day { border-top: 1px solid var(--line); padding-top: 10px; }

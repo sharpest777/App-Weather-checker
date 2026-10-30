@@ -352,6 +352,91 @@ function renderChmi(chmi, region, error) {
   `;
 }
 
+// ---------- Radar (RainViewer) ----------
+
+const radar = {
+  map: null,
+  marker: null,
+  host: '',
+  frames: [],
+  layers: [], // vrstva pro každý snímek, vytváří se až při prvním zobrazení
+  index: 0,
+  timer: null,
+};
+
+function initRadar() {
+  if (!window.L) { $('#radar').innerHTML = '<p class="muted" style="padding:12px">Mapu se nepodařilo načíst.</p>'; return; }
+  radar.map = L.map('radar', {
+    zoomControl: true,
+    scrollWheelZoom: false,
+    dragging: !L.Browser.mobile, // na mobilu jedním prstem rolovat stránku, dvěma prsty mapu
+    attributionControl: false,
+    minZoom: 4,
+    maxZoom: 10,
+  });
+  radar.map.setView([49.8, 15.5], 6); // celé Česko, než se vybere místo
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'basemap' }).addTo(radar.map);
+
+  $('#radar-slider').addEventListener('input', (e) => { stopRadar(); showFrame(Number(e.target.value)); });
+  $('#radar-play').addEventListener('click', () => (radar.timer ? stopRadar() : playRadar()));
+}
+
+async function loadRadarFrames() {
+  if (!radar.map) return;
+  try {
+    const data = await getJson('https://api.rainviewer.com/public/weather-maps.json');
+    radar.layers.forEach((l) => l && radar.map.removeLayer(l));
+    radar.host = data.host;
+    radar.frames = [...(data.radar?.past || []), ...(data.radar?.nowcast || [])];
+    radar.layers = radar.frames.map(() => null);
+    $('#radar-slider').max = String(Math.max(0, radar.frames.length - 1));
+    showFrame((data.radar?.past?.length || 1) - 1); // poslední naměřený snímek
+  } catch {
+    $('#radar-time').textContent = 'radar nedostupný';
+  }
+}
+
+function radarLayer(i) {
+  if (!radar.layers[i]) {
+    // Barevné schéma 2, vyhlazení 1, sníh odlišen 1. RainViewer má radar jen do zoomu 7, víc se dopočítá zvětšením.
+    radar.layers[i] = L.tileLayer(`${radar.host}${radar.frames[i].path}/256/{z}/{x}/{y}/2/1_1.png`, {
+      opacity: 0, maxNativeZoom: 7, maxZoom: 10, zIndex: 10,
+    }).addTo(radar.map);
+  }
+  return radar.layers[i];
+}
+
+function showFrame(i) {
+  if (!radar.frames.length) return;
+  radar.index = i;
+  radar.layers.forEach((l, j) => l && j !== i && l.setOpacity(0));
+  radarLayer(i).setOpacity(0.75);
+  radarLayer((i + 1) % radar.frames.length); // dopředu načíst další snímek animace
+  $('#radar-slider').value = String(i);
+  const t = new Date(radar.frames[i].time * 1000);
+  $('#radar-time').textContent = t.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+}
+
+function playRadar() {
+  $('#radar-play').textContent = '⏸';
+  $('#radar-play').setAttribute('aria-label', 'Zastavit animaci');
+  radar.timer = setInterval(() => showFrame((radar.index + 1) % radar.frames.length), 700);
+}
+
+function stopRadar() {
+  clearInterval(radar.timer);
+  radar.timer = null;
+  $('#radar-play').textContent = '▶';
+  $('#radar-play').setAttribute('aria-label', 'Přehrát animaci');
+}
+
+function moveRadar(loc) {
+  if (!radar.map) return;
+  radar.map.setView([loc.lat, loc.lon], 7);
+  if (radar.marker) radar.marker.setLatLng([loc.lat, loc.lon]);
+  else radar.marker = L.circleMarker([loc.lat, loc.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 }).addTo(radar.map);
+}
+
 // ---------- Hlavní logika ----------
 
 let currentLoc = null;
@@ -362,6 +447,7 @@ async function show(loc) {
   document.querySelectorAll('.chip[data-city]').forEach((b) => b.setAttribute('aria-pressed', String(CITIES[b.dataset.city].name === loc.name)));
   $('#geo-btn').setAttribute('aria-pressed', String(!!loc.geo));
   $('#now').innerHTML = `<p class="muted">Načítám ${esc(loc.name)}…</p>`;
+  moveRadar(loc);
 
   const [yr, om, chmi] = await Promise.allSettled([loadYr(loc), loadOpenMeteo(loc), loadChmi()]);
   if (loc !== currentLoc) return; // mezitím si uživatel vybral jiné místo
@@ -436,7 +522,9 @@ function setupGeo() {
 
 function init() {
   document.querySelectorAll('.chip[data-city]').forEach((b) => b.addEventListener('click', () => show(CITIES[b.dataset.city])));
-  $('#refresh').addEventListener('click', () => { chmiCache = null; show(currentLoc); });
+  $('#refresh').addEventListener('click', () => { chmiCache = null; loadRadarFrames(); show(currentLoc); });
+  initRadar();
+  loadRadarFrames();
   setupSearch();
   setupGeo();
 

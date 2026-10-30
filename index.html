@@ -12,6 +12,7 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Počasí">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -31,6 +32,17 @@
   <main>
     <section id="now" class="card now" aria-live="polite">
       <p class="muted">Načítám…</p>
+    </section>
+
+    <section class="card">
+      <h2>Radar srážek</h2>
+      <div id="radar" class="radar" aria-label="Mapa s radarem srážek"></div>
+      <div class="radar-controls">
+        <button type="button" id="radar-play" class="chip" aria-label="Přehrát animaci">▶</button>
+        <input type="range" id="radar-slider" min="0" max="0" value="0" aria-label="Čas snímku">
+        <span id="radar-time" class="radar-time"></span>
+      </div>
+      <p class="radar-note muted">Poslední zhruba 2 hodiny po 10 minutách. Radar: <a href="https://www.rainviewer.com/" rel="noopener">RainViewer</a>, mapa © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>.</p>
     </section>
 
     <section class="card">
@@ -64,6 +76,7 @@
     <p><button type="button" id="refresh" class="link">Obnovit data</button> · <span id="updated"></span></p>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
