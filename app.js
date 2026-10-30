@@ -222,9 +222,9 @@ function feelsLike(temp, wind) {
 
 // Hranice se dají snadno upravit: od kolika °C (pocitově) stačí daný kus oblečení
 const CLOTHES = [
-  { id: 'bunda', label: 'Bunda', from: -Infinity, icon: 'M8 3h8l4 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM12 6v15M8 3l4 3 4-3' },
-  { id: 'mikina', label: 'Mikina', from: 13, icon: 'M9 3h6l5 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM9 3c0 2.5 1.3 4 3 4s3-1.5 3-4M9 15h6' },
   { id: 'triko', label: 'Triko', from: 20, icon: 'M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.6 1.6-2 2.5-4 2.5S8.6 4.6 8 3z' },
+  { id: 'mikina', label: 'Mikina', from: 13, icon: 'M9 3h6l5 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM9 3c0 2.5 1.3 4 3 4s3-1.5 3-4M9 15h6' },
+  { id: 'bunda', label: 'Bunda', from: -Infinity, icon: 'M8 3h8l4 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM12 6v15M8 3l4 3 4-3' },
 ];
 
 // Síla větru v m/s: slabý do 4, střední do 8, silný od 8 (zhruba podle Beaufortovy stupnice)
@@ -241,7 +241,10 @@ const RAINS = [
   { id: 'slejvak', label: 'Slejvák', from: 8 },
 ];
 
-const levelOf = (scale, value) => scale.reduce((hit, lvl) => (value >= lvl.from ? lvl : hit), scale[0]);
+// Nejvyšší stupeň, jehož hranici hodnota dosáhla – nezáleží na pořadí stupňů ve stupnici
+const levelOf = (scale, value) => scale
+  .filter((lvl) => value >= lvl.from)
+  .reduce((hit, lvl) => (!hit || lvl.from > hit.from ? lvl : hit), null) || scale[0];
 const DIRS = ['S', 'SV', 'V', 'JV', 'J', 'JZ', 'Z', 'SZ'];
 const dirName = (deg) => DIRS[Math.round(deg / 45) % 8];
 
