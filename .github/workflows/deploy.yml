@@ -31,11 +31,35 @@ jobs:
         shell: pwsh
         run: ./scripts/fetch-chmi.ps1 -OutFile ./data/chmi.json
 
+      # Model ALADIN se počítá 4× denně – zpracuje se jen nový běh, jinak se vezme z cache
+      - name: Zjistit nejnovější běh modelu ALADIN
+        id: aladin-run
+        continue-on-error: true
+        run: echo "run=$(python3 scripts/fetch_aladin.py --latest-run)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache modelu ALADIN
+        id: aladin-cache
+        if: steps.aladin-run.outputs.run != ''
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/aladin.json
+            data/aladin-debug.json
+          key: aladin-${{ steps.aladin-run.outputs.run }}
+
+      - name: Zpracovat model ALADIN (ČHMÚ)
+        if: steps.aladin-run.outputs.run != '' && steps.aladin-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q python3-eccodes python3-numpy
+          python3 scripts/fetch_aladin.py data/aladin.json data/aladin-debug.json
+
       - name: Připravit web
         run: |
           mkdir -p _site/data
           cp index.html app.js styles.css manifest.webmanifest icon.svg _site/
-          cp data/chmi.json _site/data/
+          cp data/*.json _site/data/
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
