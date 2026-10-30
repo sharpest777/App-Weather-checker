@@ -7,7 +7,6 @@ const CITIES = {
   brno: { name: 'Brno', lat: 49.1951, lon: 16.6068 },
   ostrava: { name: 'Ostrava', lat: 49.8209, lon: 18.2625 },
 };
-const STORAGE_KEY = 'weather.location';
 const DAYS = 7;
 const CHART_HOURS = 48;
 
@@ -18,13 +17,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const round = (n) => (n == null || Number.isNaN(n) ? null : Math.round(n));
 const fmtTemp = (n) => (n == null ? '–' : `${round(n)}°`);
 const fmtRain = (n) => (n == null ? '–' : `${n < 10 ? n.toFixed(1).replace('.', ',') : Math.round(n)} mm`);
-
-function storageGet() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
-}
-function storageSet(value) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* bez úložiště to funguje taky */ }
-}
 
 // Klíč hodiny "RRRR-MM-DDTHH" v časovém pásmu místa – podle něj se párují data ze všech zdrojů
 function hourKey(date, tz) {
@@ -95,6 +87,7 @@ async function loadYr(loc) {
     time: new Date(t.time),
     temp: t.data.instant.details.air_temperature,
     wind: t.data.instant.details.wind_speed,
+    dir: t.data.instant.details.wind_from_direction,
     rain1: t.data.next_1_hours?.details?.precipitation_amount,
     rain6: t.data.next_6_hours?.details?.precipitation_amount,
     symbol: t.data.next_1_hours?.summary?.symbol_code || t.data.next_6_hours?.summary?.symbol_code,
@@ -106,7 +99,7 @@ const OM_MODELS = { icon: 'icon_seamless', ecmwf: 'ecmwf_ifs025' };
 async function loadOpenMeteo(loc) {
   const params = new URLSearchParams({
     latitude: loc.lat, longitude: loc.lon,
-    hourly: 'temperature_2m,precipitation,wind_speed_10m,weather_code',
+    hourly: 'temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,weather_code',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code',
     models: Object.values(OM_MODELS).join(','),
     timezone: 'auto', forecast_days: String(DAYS), wind_speed_unit: 'ms',
@@ -130,7 +123,7 @@ function normalizeYr(series, tz) {
   let coveredUntil = 0;
   for (const s of series) {
     const key = hourKey(s.time, tz);
-    hourly.set(key, { temp: s.temp, rain: s.rain1 ?? null, wind: s.wind, symbol: yrSymbol(s.symbol) });
+    hourly.set(key, { temp: s.temp, rain: s.rain1 ?? null, wind: s.wind, dir: s.dir, symbol: yrSymbol(s.symbol) });
 
     const day = dayOf(key);
     const d = daily.get(day) || { max: -Infinity, min: Infinity, rain: 0, symbols: [] };
@@ -165,6 +158,7 @@ function normalizeOpenMeteo(om, model) {
       temp: h[`temperature_2m_${model}`][i],
       rain: h[`precipitation_${model}`][i],
       wind: h[`wind_speed_10m_${model}`][i],
+      dir: h[`wind_direction_10m_${model}`][i],
       symbol: wmoSymbol(h[`weather_code_${model}`][i]),
     });
   });
@@ -208,17 +202,89 @@ function findRegion(chmi, loc) {
 
 // ---------- Vykreslení ----------
 
+// Popisky podle toho, odkud předpověď pochází
 const SOURCES = [
-  { id: 'yr', label: 'yr.no' },
-  { id: 'icon', label: 'ICON' },
-  { id: 'ecmwf', label: 'ECMWF' },
+  { id: 'yr', label: 'NOR · yr.no', title: 'Norský meteorologický ústav (MET Norway), yr.no' },
+  { id: 'icon', label: 'GER · DWD', title: 'Německá meteorologická služba (DWD), model ICON' },
+  { id: 'ecmwf', label: 'EU · ECMWF', title: 'Evropské centrum pro střednědobé předpovědi (ECMWF)' },
 ];
+const srcTag = (s) => `<span class="src ${s.id}" title="${esc(s.title)}">${s.label}</span>`;
+
+// ---------- Ukazatele oblečení a větru ----------
+
+// Pocitová teplota: při chladu a větru se počítá ochlazení větrem (wind chill), jinak skutečná teplota
+function feelsLike(temp, wind) {
+  const kmh = (wind ?? 0) * 3.6;
+  if (temp > 10 || kmh < 4.8) return temp;
+  const v = kmh ** 0.16;
+  return 13.12 + 0.6215 * temp - 11.37 * v + 0.3965 * temp * v;
+}
+
+// Hranice se dají snadno upravit: od kolika °C (pocitově) stačí daný kus oblečení
+const CLOTHES = [
+  { id: 'bunda', label: 'Bunda', from: -Infinity, icon: 'M8 3h8l4 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM12 6v15M8 3l4 3 4-3' },
+  { id: 'mikina', label: 'Mikina', from: 13, icon: 'M9 3h6l5 3 1 13h-3l-1-9v11H7V10l-1 9H3L4 6zM9 3c0 2.5 1.3 4 3 4s3-1.5 3-4M9 15h6' },
+  { id: 'triko', label: 'Triko', from: 20, icon: 'M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.6 1.6-2 2.5-4 2.5S8.6 4.6 8 3z' },
+];
+
+// Síla větru v m/s: slabý do 4, střední do 8, silný od 8 (zhruba podle Beaufortovy stupnice)
+const WINDS = [
+  { id: 'slaby', label: 'Slabý', from: 0 },
+  { id: 'stredni', label: 'Střední', from: 4 },
+  { id: 'silny', label: 'Silný', from: 8 },
+];
+
+const levelOf = (scale, value) => scale.reduce((hit, lvl) => (value >= lvl.from ? lvl : hit), scale[0]);
+const DIRS = ['S', 'SV', 'V', 'JV', 'J', 'JZ', 'Z', 'SZ'];
+const dirName = (deg) => DIRS[Math.round(deg / 45) % 8];
+
+function meter(scale, active, color) {
+  return `<div class="meter" style="--meter: var(${color})">
+    ${scale.map((lvl) => `<span class="seg${lvl === active ? ' on' : ''}">${lvl.label}</span>`).join('')}
+  </div>`;
+}
+
+function renderGauges(cur) {
+  if (cur.temp == null) return '';
+  const feels = feelsLike(cur.temp, cur.wind);
+  const cloth = levelOf(CLOTHES, feels);
+  const feelsNote = Math.abs(feels - cur.temp) >= 1 ? ` · pocitově ${fmtTemp(feels)}` : '';
+
+  let windHtml = '';
+  if (cur.wind != null) {
+    const w = levelOf(WINDS, cur.wind);
+    // Šipka ukazuje, kam vítr fouká (opačně než směr, odkud fouká)
+    const arrow = cur.dir != null
+      ? `<svg class="gauge-icon" viewBox="0 0 24 24" style="transform: rotate(${cur.dir + 180}deg)" aria-hidden="true"><path d="M12 3l5 9h-3.5v9h-3v-9H7z"/></svg>`
+      : '';
+    windHtml = `
+      <div class="gauge">
+        ${arrow}
+        <div class="gauge-body">
+          <div class="gauge-title">Vítr <strong>${round(cur.wind)} m/s</strong>${cur.dir != null ? ` <span class="muted">od ${dirName(cur.dir)}</span>` : ''}</div>
+          ${meter(WINDS, w, '--c-wind')}
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="gauges">
+      <div class="gauge">
+        <svg class="gauge-icon outline" viewBox="0 0 24 24" aria-hidden="true"><path d="${cloth.icon}"/></svg>
+        <div class="gauge-body">
+          <div class="gauge-title">Oblečení: <strong>${cloth.label.toLowerCase()}</strong><span class="muted">${feelsNote}</span></div>
+          ${meter(CLOTHES, cloth, '--c-cloth')}
+        </div>
+      </div>
+      ${windHtml}
+    </div>`;
+}
 
 function renderNow(loc, data, region, tz) {
   const key = hourKey(new Date(), tz);
   const cur = Object.fromEntries(SOURCES.map((s) => [s.id, data[s.id]?.hourly.get(key)]));
   const main = cur.yr || cur.icon || cur.ecmwf;
-  const regionName = region ? regionLabel(region) : '';
+  const regionName = region && regionLabel(region) !== loc.name ? regionLabel(region) : '';
 
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
   let agree = '';
@@ -235,15 +301,18 @@ function renderNow(loc, data, region, tz) {
       <span class="muted">${esc(regionName)}</span>
     </div>
     ${main ? `
-      <div class="now-main">
-        <span class="now-emoji">${main.symbol.emoji}</span>
-        <div>
-          <div class="now-temp">${fmtTemp(main.temp)}</div>
-          <div class="now-desc">${esc(main.symbol.text)}${main.wind != null ? ` · vítr ${round(main.wind)} m/s` : ''}</div>
+      <div class="now-grid">
+        <div class="now-main">
+          <span class="now-emoji">${main.symbol.emoji}</span>
+          <div>
+            <div class="now-temp">${fmtTemp(main.temp)}</div>
+            <div class="now-desc">${esc(main.symbol.text)}</div>
+          </div>
         </div>
+        ${renderGauges(main)}
       </div>
       <div class="models">
-        ${SOURCES.map((s) => `<span><span class="src ${s.id}">${s.label}</span> ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
+        ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
       </div>
       <div class="agree">${agree}</div>
     ` : '<p class="error">Aktuální data se nepodařilo načíst.</p>'}
@@ -318,8 +387,8 @@ function renderDays(data, tz) {
       <div class="day-rows">
         ${SOURCES.map((s) => {
           const d = data[s.id]?.daily.get(day);
-          if (!d || !Number.isFinite(d.max)) return `<span class="src ${s.id}">${s.label}</span><span class="muted">–</span>`;
-          return `<span class="src ${s.id}">${s.label}</span>
+          if (!d || !Number.isFinite(d.max)) return `${srcTag(s)}<span class="muted">–</span>`;
+          return `${srcTag(s)}
                   <span>${d.symbol.emoji} ${fmtTemp(d.max)} / ${fmtTemp(d.min)} <span class="rain">· ${fmtRain(d.rain)}</span></span>`;
         }).join('')}
       </div>
@@ -443,7 +512,6 @@ let currentLoc = null;
 
 async function show(loc) {
   currentLoc = loc;
-  storageSet(loc.geo ? { geo: true } : loc);
   document.querySelectorAll('.chip[data-city]').forEach((b) => b.setAttribute('aria-pressed', String(CITIES[b.dataset.city].name === loc.name)));
   $('#geo-btn').setAttribute('aria-pressed', String(!!loc.geo));
   $('#now').innerHTML = `<p class="muted">Načítám ${esc(loc.name)}…</p>`;
@@ -528,10 +596,8 @@ function init() {
   setupSearch();
   setupGeo();
 
-  // Poloha se neukládá přesně – po obnovení stránky se zjistí znovu
-  const saved = storageGet();
-  if (saved?.geo) $('#geo-btn').click();
-  else show(saved && saved.lat ? saved : CITIES.praha);
+  // Po otevření vždy Praha
+  show(CITIES.praha);
 }
 
 init();

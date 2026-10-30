@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $base = 'https://opendata.chmi.cz/meteorology/weather/forecast/now/'
 $client = New-Object System.Net.WebClient
 $client.Encoding = [System.Text.Encoding]::UTF8
-$client.Headers.Add('User-Agent', 'App-Weather-checker (github.com/sharpest777/App-Weather-checker)')
+$client.Headers.Add('User-Agent', 'Obloha (github.com/sharpest777/Obloha)')
 
 # CK0 = dnes, CKn = noc, CK1 = zítra, CK2–CK4 = další dny
 $kinds = @{ 'CK0' = 0; 'CKn' = 1; 'CK1' = 2; 'CK2' = 3; 'CK3' = 4; 'CK4' = 5 }

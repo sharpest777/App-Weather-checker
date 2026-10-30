@@ -9,6 +9,8 @@
   --c-icon: #ea580c;
   --c-ecmwf: #059669;
   --c-rain: #93c5fd;
+  --c-cloth: #7c3aed;
+  --c-wind: #0891b2;
   --radius: 14px;
   color-scheme: light;
 }
@@ -25,6 +27,8 @@
     --c-icon: #fb923c;
     --c-ecmwf: #34d399;
     --c-rain: #1d4ed8;
+    --c-cloth: #7c3aed;
+    --c-wind: #0e7490;
     color-scheme: dark;
   }
 }
@@ -105,6 +109,26 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .now-emoji { font-size: 3rem; line-height: 1; }
 .now-temp { font-size: 3rem; font-weight: 600; line-height: 1; }
 .now-desc { color: var(--muted); }
+.now-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin: 8px 0 12px; }
+.now-grid .now-main { margin: 0; }
+.gauges { flex: 1 1 260px; display: grid; gap: 12px; }
+.gauge { display: flex; align-items: center; gap: 10px; }
+.gauge-icon { width: 34px; height: 34px; flex: none; fill: var(--text); transition: transform .4s; }
+.gauge-icon.outline { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.gauge-body { flex: 1; min-width: 0; }
+.gauge-title { font-size: .95rem; margin-bottom: 4px; }
+.meter { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.seg {
+  text-align: center;
+  font-size: .75rem;
+  padding: 3px 0;
+  background: var(--bg);
+  color: var(--muted);
+}
+.seg:first-child { border-radius: 6px 0 0 6px; }
+.seg:last-child { border-radius: 0 6px 6px 0; }
+.seg.on { background: var(--meter); color: #fff; font-weight: 600; }
+
 .models { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .95rem; }
 .agree { margin-top: 8px; font-size: .9rem; }
 
