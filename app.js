@@ -390,11 +390,11 @@ function stormLevel(data, tz) {
 
 // ---------- Varování před UV zářením ----------
 
-// UV index: 3–5 střední, 6–7 vysoké, od 8 velmi vysoké (pak i opalovací krém)
+// UV index: 3–5 střední (sluneční brýle), 6–7 vysoké a od 8 velmi vysoké (opalovací krém)
 const UVS = [
-  { level: 1, from: 3, label: 'Střední UV záření', icon: '🔆' },
-  { level: 2, from: 6, label: 'Vysoké UV záření', icon: '🔆🔆' },
-  { level: 3, from: 8, label: 'Velmi vysoké UV záření', icon: '🔆🔆🔆🧴' },
+  { level: 1, from: 3, label: 'Střední UV záření', icon: '🔆🕶️', tip: 'vezmi si sluneční brýle' },
+  { level: 2, from: 6, label: 'Vysoké UV záření', icon: '🔆🔆🧴', tip: 'namaž se opalovacím krémem' },
+  { level: 3, from: 8, label: 'Velmi vysoké UV záření', icon: '🔆🔆🔆🧴', tip: 'namaž se opalovacím krémem' },
 ];
 
 // Nejvyšší UV index v příštích 12 hodinách a kdy nastane
@@ -416,7 +416,92 @@ function renderUv(uv, tz) {
   const when = new Date(uv.at).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz });
   return `<div class="storm uv-${uv.level}" role="note">
     <span class="storm-icon" aria-hidden="true">${uv.icon}</span>
-    <span><strong>${uv.label}</strong> <span class="storm-when">UV až ${Math.round(uv.max)} kolem ${when}${uv.level === 3 ? ' · namaž se opalovacím krémem' : ''}</span></span>
+    <span><strong>${uv.label}</strong> <span class="storm-when">UV až ${Math.round(uv.max)} kolem ${when} · ${uv.tip}</span></span>
+  </div>`;
+}
+
+// ---------- Varování před kroupami ----------
+
+const HAIL_HOURS = 24;
+// Modely GER/EU rozlišují jen bouřku s kroupami (kód 96) a se silnými kroupami (99);
+// velikost je proto jen orientační odhad
+const HAIL_SIZE = { 96: 'drobné, zhruba do 1 cm', 99: 'velké, 2 cm i víc' };
+
+function hailInfo(data, tz) {
+  let first = null;
+  let last = null;
+  let worst = 0;
+  for (let i = 0; i < HAIL_HOURS; i++) {
+    const t = Math.floor((Date.now() + i * 3600e3) / 3600e3) * 3600e3;
+    const key = hourKey(new Date(t), tz);
+    const codes = [data.icon, data.ecmwf].map((d) => d?.hourly.get(key)?.code).filter((c) => c === 96 || c === 99);
+    if (!codes.length) continue;
+    if (first == null) first = t;
+    last = t;
+    worst = Math.max(worst, ...codes);
+  }
+  return first == null ? null : { from: first, to: last + 3600e3, size: HAIL_SIZE[worst], severe: worst === 99 };
+}
+
+const fmtHour = (t, tz) => new Date(t).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+
+function renderHail(hail, tz) {
+  if (!hail) return '';
+  const today = dayOf(hourKey(new Date(), tz));
+  const day = dayOf(hourKey(new Date(hail.from), tz)) === today ? 'dnes' : 'zítra';
+  return `<div class="storm hail${hail.severe ? ' severe' : ''}" role="alert">
+    <span class="storm-icon" aria-hidden="true">🧊</span>
+    <span><strong>Kroupy</strong> ${hail.size} <span class="storm-when">${day} ${fmtHour(hail.from, tz)}–${fmtHour(hail.to, tz)}</span></span>
+  </div>`;
+}
+
+// ---------- Ráno u auta: námraza a sníh ----------
+
+// Průměrná teplota zdrojů v dané hodině
+function avgTempAt(data, key) {
+  const ts = SOURCES.map((s) => data[s.id]?.hourly.get(key)?.temp).filter((t) => t != null);
+  return ts.length ? avg(ts) : null;
+}
+
+// Příští ráno (nejbližší 6:00). Hlídá večer a noc před ním (17:00–8:00):
+// mráz pozdě v noci nebo brzy ráno (22:00–8:00) = odmrazit sklo,
+// hustý sníh (aspoň 2 mm vody při teplotě do 0,5 °C) = očistit auto od sněhu
+function carInfo(data, tz) {
+  const now = Date.now();
+  const nowHour = Number(hourKey(new Date(now), tz).slice(11));
+  const hoursTo6 = (6 - nowHour + 24) % 24 || 24;
+  const morning = Math.floor((now + hoursTo6 * 3600e3) / 3600e3) * 3600e3;
+  const rain = rainSource(data, hourKey(new Date(now), tz));
+  let minT = Infinity;
+  let snow = 0;
+  for (let h = -13; h <= 2; h++) { // 17:00 večer až 8:00 ráno
+    const t = morning + h * 3600e3;
+    if (t < now - 3600e3) continue;
+    const key = hourKey(new Date(t), tz);
+    const temp = avgTempAt(data, key);
+    if (temp == null) continue;
+    if (h >= -8) minT = Math.min(minT, temp); // mráz se hlídá od 22:00
+    if (temp <= 0.5) snow += rain.hourly(key) || 0;
+  }
+  const freeze = minT <= 0;
+  const heavySnow = snow >= 2;
+  if (!freeze && !heavySnow) return null;
+  const today = dayOf(hourKey(new Date(now), tz));
+  const when = dayOf(hourKey(new Date(morning), tz)) === today ? 'Dnes ráno' : 'Zítra ráno';
+  return { when, freeze, minT, heavySnow, snow };
+}
+
+function renderCar(car) {
+  if (!car) return '';
+  const tasks = [];
+  if (car.heavySnow) tasks.push('očistit auto od sněhu');
+  if (car.freeze) tasks.push('odmrazit přední sklo');
+  const why = car.heavySnow
+    ? `bude hustě sněžit${car.freeze ? ` a mrznout (až ${fmtTemp(car.minT)})` : ''}`
+    : `bude mrznout (až ${fmtTemp(car.minT)})`;
+  return `<div class="storm car" role="note">
+    <span class="storm-icon" aria-hidden="true">${car.heavySnow ? '❄️🚗' : '🧊🚗'}</span>
+    <span><strong>${car.when} budeš muset ${tasks.join(' a ')}</strong> <span class="storm-when">· v noci ${why}</span></span>
   </div>`;
 }
 
@@ -427,7 +512,7 @@ function renderStorm(storm, tz) {
     : `od ${new Date(storm.from).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
   return `<div class="storm storm-${storm.level}" role="alert">
     <span class="storm-icon" aria-hidden="true">${storm.icon}</span>
-    <span><strong>${storm.label}</strong>${storm.hail ? ' s kroupami' : ''} <span class="storm-when">${when}</span></span>
+    <span><strong>${storm.label}</strong> <span class="storm-when">${when}</span></span>
   </div>`;
 }
 
@@ -557,7 +642,9 @@ function renderNow(loc, data, region, tz) {
         ${renderGauges(main, dayMax, rain, preferredSource(data, key, 'cloud'))}
       </div>
       ${renderStorm(stormLevel(data, tz), tz)}
+      ${renderHail(hailInfo(data, tz), tz)}
       ${renderUv(uvLevel(data, tz), tz)}
+      ${renderCar(carInfo(data, tz))}
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
       </div>

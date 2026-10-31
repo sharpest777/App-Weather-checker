@@ -288,4 +288,14 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
   .uv-1 { background: #3f3a06; color: #fef08a; }
   .uv-2 { background: #7c2d12; color: #fed7aa; }
 }
-.storm + .storm { margin-left: 8px; }
+.storm { margin-right: 8px; }
+
+/* Kroupy a ranní varování k autu */
+.hail { background: #e0f2fe; color: #0c4a6e; }
+.hail.severe { background: #0c4a6e; color: #fff; font-weight: 600; }
+.car { background: #dbeafe; color: #1e3a8a; }
+@media (prefers-color-scheme: dark) {
+  .hail { background: #0c4a6e; color: #e0f2fe; }
+  .hail.severe { background: #e0f2fe; color: #0c4a6e; }
+  .car { background: #1e3a8a; color: #dbeafe; }
+}
