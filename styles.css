@@ -9,6 +9,8 @@
   --c-icon: #ea580c;
   --c-ecmwf: #059669;
   --c-cz: #dc2626;
+  --c-max: #ea580c;
+  --c-min: #2563eb;
   --c-rain: #93c5fd;
   --c-cloth: #7c3aed;
   --c-wind: #0891b2;
@@ -30,6 +32,8 @@
     --c-icon: #fb923c;
     --c-ecmwf: #34d399;
     --c-cz: #f87171;
+    --c-max: #fb923c;
+    --c-min: #60a5fa;
     --c-rain: #1d4ed8;
     --c-cloth: #7c3aed;
     --c-wind: #0e7490;
@@ -122,6 +126,8 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .gauge-icon { width: 34px; height: 34px; flex: none; fill: var(--text); transition: transform .4s; }
 .gauge-icon.outline { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .rain-drop { fill: #2563eb; }
+.umbrella .canopy { fill: #2563eb; }
+.umbrella .handle { fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; }
 .gauge-icon.dry { stroke: #d97706; }
 .wind-arrow.cold { fill: #2563eb; }
 .wind-arrow.warm { fill: #ea580c; }
@@ -192,3 +198,13 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 
 .foot { font-size: .85rem; color: var(--muted); padding-bottom: 24px; }
 .link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+
+/* Graf na 7 dní */
+.dot.max { background: var(--c-max); }
+.dot.min { background: var(--c-min); }
+.days-chart .day-label { fill: var(--text); font-size: 13px; font-weight: 600; }
+.days-chart .day-icon { font-size: 22px; }
+.days-chart .t-max { fill: var(--c-max); font-size: 13px; font-weight: 600; }
+.days-chart .t-min { fill: var(--c-min); font-size: 13px; font-weight: 600; }
+.days-chart .rain-label { fill: var(--muted); font-size: 11px; }
+.days-chart .src-count { fill: var(--muted); font-size: 10px; }

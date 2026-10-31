@@ -337,6 +337,7 @@ function preferredSource(data, key, field) {
   return { id: 'yr', label: 'NOR', hourly: (k) => data.yr?.hourly.get(k)?.[field], now: data.yr?.hourly.get(key)?.[field] };
 }
 const rainSource = (data, key) => preferredSource(data, key, 'rain');
+const RAIN_SOON_HOURS = 6; // na kolik hodin dopředu hlídat déšť kvůli deštníku
 
 // Oblačnost (podíl oblohy 0–1): jasno do 30 %, polojasno do 70 %, oblačno od 70 %
 const CLOUDS = [
@@ -388,11 +389,16 @@ function renderGauges(cur, dayMax, rain, cloud) {
   let cloudHtml = '';
   if (cloud?.now != null) {
     const c = levelOf(CLOUDS, cloud.now);
+    // Když má v příštích hodinách pršet středně nebo silně, místo mraku deštník
+    const umbrella = (rain?.soonMax ?? 0) >= RAINS[1].from;
+    const icon = umbrella
+      ? `<svg class="gauge-icon umbrella" viewBox="0 0 24 24" role="img" aria-label="vezmi si deštník"><title>Do ${RAIN_SOON_HOURS} hodin má pršet až ${fmtRain(rain.soonMax)}/h</title><path class="canopy" d="M2 12a10 10 0 0 1 20 0z"/><path class="handle" d="M12 12v7a2 2 0 0 1-4 0"/></svg>`
+      : '<svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>';
     cloudHtml = `
       <div class="gauge">
-        <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>
+        ${icon}
         <div class="gauge-body">
-          <div class="gauge-title">Obloha <strong>${c.label.toLowerCase()}</strong> <span class="muted">${Math.round(cloud.now * 100)} % mraků</span></div>
+          <div class="gauge-title">Obloha <strong>${c.label.toLowerCase()}</strong> <span class="muted">${Math.round(cloud.now * 100)} % mraků${umbrella ? ' · vezmi deštník' : ''}</span></div>
           ${meter(CLOUDS, c, '--c-cloud')}
         </div>
       </div>`;
@@ -422,6 +428,12 @@ function renderNow(loc, data, region, tz) {
   const dayMax = [data.icon, data.ecmwf, data.cz, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
   const regionName = region && regionLabel(region) !== loc.name ? regionLabel(region) : '';
 
+  // Nejsilnější hodinové srážky v příštích hodinách (pro deštník u oblohy)
+  const rain = rainSource(data, key);
+  const soon = [];
+  for (let i = 0; i < RAIN_SOON_HOURS; i++) soon.push(rain.hourly(hourKey(new Date(Date.now() + i * 3600e3), tz)) ?? 0);
+  rain.soonMax = Math.max(...soon);
+
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
   let agree = '';
   if (temps.length >= 2) {
@@ -445,7 +457,7 @@ function renderNow(loc, data, region, tz) {
             <div class="now-desc">${esc(main.symbol.text)}</div>
           </div>
         </div>
-        ${renderGauges(main, dayMax, rainSource(data, key), preferredSource(data, key, 'cloud'))}
+        ${renderGauges(main, dayMax, rain, preferredSource(data, key, 'cloud'))}
       </div>
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
@@ -514,24 +526,76 @@ function renderChart(data, tz) {
   $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graf teploty na 48 hodin">${grid}${rainBars}${lines}</svg>`;
 }
 
+const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+// Průměr všech zdrojů pro jeden den: nejvyšší a nejnižší teplota, srážky a jedna ikona
+function averageDay(data, day, today) {
+  const ds = SOURCES
+    // NOR a CZ mají pro dnešek jen zbývající hodiny – do dnešního průměru je nebrat
+    .filter((s) => !(day === today && (s.id === 'yr' || s.id === 'cz')))
+    .map((s) => data[s.id]?.daily.get(day))
+    .filter((d) => d && Number.isFinite(d.max));
+  if (!ds.length) return null;
+  const max = avg(ds.map((d) => d.max));
+  const min = avg(ds.map((d) => d.min));
+  const rain = avg(ds.map((d) => d.rain || 0));
+
+  // Ikona: při průměrných srážkách aspoň 1 mm déšť (sníh), jinak nejčastější ikona mezi zdroji
+  let symbol;
+  if (rain >= 1) {
+    symbol = max <= 1 ? { emoji: '🌨️', text: 'sněžení' } : rain >= 10 ? { emoji: '🌧️', text: 'déšť' } : { emoji: '🌦️', text: 'přeháňky' };
+  } else {
+    const dry = ds.map((d) => d.symbol).filter((s) => s?.emoji && !['🌧️', '🌦️', '🌨️', '⛈️'].includes(s.emoji));
+    const counts = {};
+    for (const s of dry) counts[s.emoji] = (counts[s.emoji] || 0) + 1;
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    symbol = dry.find((s) => s.emoji === top?.[0]) || { emoji: '⛅', text: 'polojasno' };
+  }
+  return { max, min, rain, symbol, sources: ds.length };
+}
+
 function renderDays(data, tz) {
   const today = dayOf(hourKey(new Date(), tz));
-  const days = [...(data.icon?.daily.keys() || data.yr?.daily.keys() || [])].filter((d) => d >= today).slice(0, DAYS);
+  const allDays = new Set();
+  for (const s of SOURCES) for (const d of data[s.id]?.daily.keys() || []) if (d >= today) allDays.add(d);
+  const days = [...allDays].sort().slice(0, DAYS)
+    .map((day) => ({ day, ...averageDay(data, day, today) }))
+    .filter((d) => d.max != null);
   if (!days.length) { $('#days').innerHTML = '<p class="muted">Data nejsou k dispozici.</p>'; return; }
 
-  $('#days').innerHTML = days.map((day, i) => `
-    <div class="day">
-      <div class="day-name">${dayLabel(day, i)}</div>
-      <div class="day-rows">
-        ${SOURCES.map((s) => {
-          const d = data[s.id]?.daily.get(day);
-          if (!d || !Number.isFinite(d.max)) return `${srcTag(s)}<span class="muted">–</span>`;
-          return `${srcTag(s)}
-                  <span>${d.symbol.emoji} ${fmtTemp(d.max)} / ${fmtTemp(d.min)} <span class="rain">· ${fmtRain(d.rain)}</span></span>`;
-        }).join('')}
-      </div>
-    </div>
-  `).join('');
+  const W = Math.max(300, $('#days').clientWidth || 700);
+  const narrow = W < 500;
+  const H = 250, padL = 8, padR = 8, padT = 52, padB = 46;
+  const colW = (W - padL - padR) / days.length;
+  const x = (i) => padL + colW * (i + 0.5);
+  const tMin = Math.floor(Math.min(...days.map((d) => d.min))) - 2;
+  const tMax = Math.ceil(Math.max(...days.map((d) => d.max))) + 2;
+  // Teploty v horní části, srážky dole (10 mm = 50 px)
+  const plotBottom = H - padB - 56;
+  const y = (t) => padT + (1 - (t - tMin) / (tMax - tMin)) * (plotBottom - padT);
+  const rainBase = H - padB;
+
+  const line = (key) => days.map((d, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join('');
+
+  let svg = '';
+  days.forEach((d, i) => {
+    const cx = x(i);
+    if (i) svg += `<line class="grid" x1="${padL + colW * i}" x2="${padL + colW * i}" y1="8" y2="${H - 8}"/>`;
+    const label = i === 0 ? 'Dnes' : i === 1 ? 'Zítra' : new Date(`${d.day}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' });
+    svg += `<text x="${cx}" y="20" text-anchor="middle" class="day-label">${label}</text>`;
+    svg += `<text x="${cx}" y="44" text-anchor="middle" class="day-icon"><title>${esc(d.symbol.text)}</title>${d.symbol.emoji}</text>`;
+    svg += `<text x="${cx}" y="${y(d.max) - 8}" text-anchor="middle" class="t-max">${fmtTemp(d.max)}</text>`;
+    svg += `<text x="${cx}" y="${y(d.min) + 18}" text-anchor="middle" class="t-min">${fmtTemp(d.min)}</text>`;
+    const h = Math.min(50, (d.rain / 10) * 50);
+    if (d.rain >= 0.1) svg += `<rect x="${cx - Math.min(14, colW / 4)}" y="${rainBase - h}" width="${Math.min(28, colW / 2)}" height="${Math.max(h, 2)}" rx="2" fill="var(--c-rain)"/>`;
+    svg += `<text x="${cx}" y="${rainBase + 16}" text-anchor="middle" class="rain-label">${d.rain >= 0.1 ? fmtRain(d.rain) : '–'}</text>`;
+    svg += `<text x="${cx}" y="${rainBase + 32}" text-anchor="middle" class="src-count">${narrow ? '' : `${d.sources} zdr.`}</text>`;
+  });
+  svg += `<path d="${line('max')}" fill="none" stroke="var(--c-max)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  svg += `<path d="${line('min')}" fill="none" stroke="var(--c-min)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  svg += days.map((d, i) => `<circle cx="${x(i)}" cy="${y(d.max)}" r="3.5" fill="var(--c-max)"/><circle cx="${x(i)}" cy="${y(d.min)}" r="3.5" fill="var(--c-min)"/>`).join('');
+
+  $('#days').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Předpověď na ${days.length} dní">${svg}</svg>`;
 }
 
 function renderChmi(chmi, region, error) {
