@@ -707,8 +707,8 @@ function renderNow(loc, data, region, tz) {
   if (temps.length >= 2) {
     const spread = Math.max(...temps) - Math.min(...temps);
     agree = spread <= 1.5
-      ? '✅ Zdroje se teď shodují.'
-      : `⚠️ Zdroje se teď rozcházejí o ${round(spread)} °C.`;
+      ? 'Zdroje se teď shodují.'
+      : `Zdroje se teď rozcházejí o ${round(spread)} °C.`;
   }
 
   $('#now').innerHTML = `

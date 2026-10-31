@@ -316,7 +316,6 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 }
 
 /* Hlavní zdroj pro dané místo */
-.models .primary { font-weight: 700; }
 .models .primary::after { content: " ★"; color: var(--muted); font-size: .8em; }
 
 /* Úseky dnů pod grafem na 48 hodin */
