@@ -8,7 +8,6 @@ const CITIES = {
   ostrava: { name: 'Ostrava', lat: 49.8209, lon: 18.2625 },
 };
 const DAYS = 7;
-const CHART_HOURS = 48;
 
 // ---------- Pomocné funkce ----------
 
@@ -765,7 +764,9 @@ function sunTimes(date, lat, lon) {
 function renderChart(data, tz, loc) {
   const start = new Date();
   const keys = [];
-  for (let i = 0; i < CHART_HOURS; i++) keys.push(hourKey(new Date(start.getTime() + i * 3600e3), tz));
+  // Zbytek dneška a celý zítřek (do 23:00)
+  const hours = 48 - Number(hourKey(start, tz).slice(11));
+  for (let i = 0; i < hours; i++) keys.push(hourKey(new Date(start.getTime() + i * 3600e3), tz));
 
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
@@ -773,7 +774,7 @@ function renderChart(data, tz, loc) {
   const H = narrow ? 282 : 322, padL = 14, padR = 14, padT = 34, padB = 76;
   const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
-  const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
+  const barW = Math.max(2, (W - padL - padR) / hours - 2);
 
   // Průměr dostupných zdrojů pro každou hodinu
   const series = keys.map((k) => SOURCES.map((s) => data[s.id]?.hourly.get(k)?.temp).filter((t) => t != null));
@@ -790,7 +791,7 @@ function renderChart(data, tz, loc) {
   // Den a noc podle skutečného východu a západu slunce: barevný pás pod grafem
   // a jemné svislé čáry v okamžiku východu a západu
   const t0 = start.getTime();
-  const t1 = t0 + (CHART_HOURS - 1) * 3600e3;
+  const t1 = t0 + (hours - 1) * 3600e3;
   const xt = (t) => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
   const fmtTime = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz });
   const events = [];
@@ -820,7 +821,10 @@ function renderChart(data, tz, loc) {
       // Okamžik východu/západu: svislá čára přes graf a čas v pásu
       sun += `<line class="${e.day ? 'sunrise' : 'sunset'}" x1="${xb}" x2="${xb}" y1="${padT - 22}" y2="${stripY + stripH}"/>`;
       // 🌅 východ, 🌇 západ; na mobilu jen symbol, aby se popisky nepřekrývaly
-      sun += `<text x="${xb + 3}" y="${padT - 6}" class="sun-time"><title>${e.day ? 'Východ' : 'Západ'} slunce ${fmtTime(e.t)}</title>${e.day ? '🌅' : '🌇'}${narrow ? '' : ` ${fmtTime(e.t)}`}</text>`;
+      // Na mobilu se vejde jen jeden popisek na den, proto jen západ slunce s časem
+      if (!narrow || !e.day) {
+        sun += `<text x="${xb + 3}" y="${padT - 6}" class="sun-time"><title>${e.day ? 'Východ' : 'Západ'} slunce ${fmtTime(e.t)}</title>${e.day ? '🌅' : '🌇'} ${fmtTime(e.t)}</text>`;
+      }
       isDay = e.day;
       segStart = e.t;
     }
@@ -836,7 +840,7 @@ function renderChart(data, tz, loc) {
   });
 
   // Pod hodinami úseky dnů: Dnes / Zítra / Pozítří, každý se závorkou přes své hodiny
-  const DAY_NAMES = ['Dnes', 'Zítra', 'Pozítří'];
+  const DAY_NAMES = ['Dnes', 'Zítra'];
   const dayStarts = keys.map((k, i) => (i === 0 || k.slice(11) === '00' ? i : -1)).filter((i) => i >= 0);
   dayStarts.forEach((s, n) => {
     const e = n + 1 < dayStarts.length ? dayStarts[n + 1] : keys.length - 1;
@@ -1064,9 +1068,9 @@ function renderChmi(chmi, region, error) {
       const rest = f.items.filter((it) => it.name !== 'textIntro');
       return `
         <div class="chmi-block">
-          <h3>${esc(f.headline)}</h3>
+          <h3 class="chmi-day">${new Date(f.start).toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'numeric', timeZone: 'Europe/Prague' })}</h3>
           ${intro ? `<p class="chmi-intro">${esc(intro.text)}</p>` : ''}
-          ${rest.map((it) => `<p>${it.headline ? `<span class="muted">${esc(it.headline)}</span> ` : ''}${esc(it.text)}</p>`).join('')}
+          ${rest.map((it) => `<p>${it.headline ? `<span class="chmi-sub">${esc(it.headline)}</span> ` : ''}${esc(it.text)}</p>`).join('')}
           <p class="chmi-meta muted">Vydáno ${new Date(f.sent).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${f.author ? ` · ${esc(f.author)}` : ''}</p>
         </div>`;
     }).join('')}

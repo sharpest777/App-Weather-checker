@@ -212,9 +212,19 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .rain { color: var(--muted); }
 
 /* ČHMÚ */
-.chmi-block { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.chmi-block { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
 .chmi-block:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
-.chmi-block h3 { font-size: .95rem; margin: 0 0 4px; }
+.chmi-block h3.chmi-day {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: .95rem;
+}
+.chmi-day::first-letter { text-transform: uppercase; }
+.chmi-sub { font-weight: 700; color: var(--text); }
 .chmi-block p { margin: 4px 0; }
 .chmi-intro { font-weight: 600; }
 .chmi-meta { font-size: .85rem; }
