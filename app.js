@@ -893,7 +893,20 @@ function setupGeo() {
   });
 }
 
+// GitHub Pages nechá prohlížeč držet stránku až 10 minut. Když je na serveru novější verze,
+// načte se znovu přes jinou adresu (?v=…), kterou prohlížeč v cache nemá.
+async function checkForUpdate() {
+  const current = document.querySelector('script[src^="app.js"]')?.getAttribute('src').split('v=')[1];
+  if (!current || current === '__VERSION__') return; // lokální vývoj
+  try {
+    const html = await (await fetch(`./?check=${Date.now()}`, { cache: 'no-store' })).text();
+    const latest = html.match(/app\.js\?v=([\w]+)/)?.[1];
+    if (latest && latest !== current) location.replace(`${location.pathname}?v=${latest}`);
+  } catch { /* bez připojení nic nedělat */ }
+}
+
 function init() {
+  checkForUpdate();
   document.querySelectorAll('.chip[data-city]').forEach((b) => b.addEventListener('click', () => show(CITIES[b.dataset.city])));
   $('#refresh').addEventListener('click', () => { chmiCache = null; aladinCache = null; loadRadarFrames(); show(currentLoc); });
   initRadar();
