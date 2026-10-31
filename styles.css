@@ -250,6 +250,6 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .chart .sun-icon { font-size: 12px; }
 .chart .sunrise { stroke: var(--c-sunrise); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .chart .sunset { stroke: var(--c-sunset); stroke-width: 1.5; stroke-dasharray: 3 3; }
-.chart .sun-time { fill: var(--muted); font-size: 10px; }
+.chart .sun-time { fill: var(--muted); font-size: 11px; }
 .chart .band-day { fill: var(--c-band-day); }
 .chart .band-night { fill: var(--c-band-night); }

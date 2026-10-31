@@ -496,7 +496,7 @@ function renderChart(data, tz, loc) {
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
   const narrow = W < 500;
-  const H = narrow ? 250 : 290, padL = 30, padR = 10, padT = 26, padB = 50;
+  const H = narrow ? 250 : 290, padL = 14, padR = 14, padT = 28, padB = 50;
   const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
   const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
@@ -545,18 +545,15 @@ function renderChart(data, tz, loc) {
     if (!e.end) {
       // Okamžik východu/západu: svislá čára přes graf a čas v pásu
       sun += `<line class="${e.day ? 'sunrise' : 'sunset'}" x1="${xb}" x2="${xb}" y1="${padT - 10}" y2="${stripY + stripH}"/>`;
-      if (!narrow) sun += `<text x="${xb + 4}" y="${padT - 2}" class="sun-time">${e.day ? 'východ' : 'západ'} ${fmtTime(e.t)}</text>`;
+      // 🌅 východ, 🌇 západ; na mobilu jen symbol, aby se popisky nepřekrývaly
+      sun += `<text x="${xb + 3}" y="${padT - 1}" class="sun-time"><title>${e.day ? 'Východ' : 'Západ'} slunce ${fmtTime(e.t)}</title>${e.day ? '🌅' : '🌇'}${narrow ? '' : ` ${fmtTime(e.t)}`}</text>`;
       isDay = e.day;
       segStart = e.t;
     }
   });
 
-  // Mřížka teplot a popisky času
-  const step = tMax - tMin > 12 ? 4 : 2;
+  // Popisky času (vodorovné čáry ani stupnice nejsou potřeba – hodnoty jsou přímo u křivky)
   let grid = '';
-  for (let t = Math.ceil(tMin / step) * step; t <= tMax; t += step) {
-    grid += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}"/><text x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${t}°</text>`;
-  }
   keys.forEach((k, i) => {
     const h = Number(k.slice(11));
     if (h % labelEvery === 0) {
