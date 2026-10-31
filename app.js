@@ -531,6 +531,7 @@ function renderChart(data, tz, loc) {
   const stripY = H - padB + 4;
   const stripH = 16;
   let sun = '';
+  let bands = ''; // podbarvení plochy grafu: den světle žlutě, noc tmavěji
   let segStart = t0;
   const inside = events.filter((e) => e.t > t0 && e.t < t1);
   [...inside, { t: t1, end: true }].forEach((e) => {
@@ -538,6 +539,7 @@ function renderChart(data, tz, loc) {
     const xb = xt(e.t);
     const w = xb - xa;
     const cls = isDay ? 'sun-day' : 'sun-night';
+    bands += `<rect class="${isDay ? 'band-day' : 'band-night'}" x="${xa}" y="${padT - 10}" width="${Math.max(0, w)}" height="${stripY - padT + 10}"/>`;
     sun += `<rect class="${cls}" x="${xa}" y="${stripY}" width="${Math.max(0, w)}" height="${stripH}"><title>${isDay ? 'Den' : 'Noc'} ${fmtTime(segStart)}–${fmtTime(e.t)}</title></rect>`;
     if (w > 26) sun += `<text x="${(xa + xb) / 2}" y="${stripY + 12}" text-anchor="middle" class="sun-icon">${isDay ? '☀️' : '🌙'}</text>`;
     if (!e.end) {
@@ -612,7 +614,7 @@ function renderChart(data, tz, loc) {
           ${tempStops(tMax, tMin, 0.28, 0.03)}
         </linearGradient>
       </defs>
-      ${grid}${sun}
+      ${bands}${grid}${sun}
       <line class="axis" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>
       ${rainBars}
       ${area ? `<path d="${area}" fill="url(#temp-fill)"/>` : ''}
