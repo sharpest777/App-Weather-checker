@@ -339,11 +339,25 @@ function meter(scale, active, color) {
 // Šipka větru je oranžová, když je den teplý (nejvyšší denní teplota aspoň tolik °C), jinak modrá
 const WARM_DAY_FROM = 15;
 
-// Srážky a oblačnost bere přednostně z CZ (ALADIN, 1 km), kde CZ není, z NOR (yr.no)
+// Pořadí zdrojů podle oblasti: v Česku CZ, pak GER, pak ostatní; na severu (od 55° s. š.) NOR;
+// jinde v Evropě a ve světě EU
+const SOURCE_ORDER = {
+  cz: ['cz', 'icon', 'yr', 'ecmwf'],
+  north: ['yr', 'icon', 'ecmwf', 'cz'],
+  europe: ['ecmwf', 'icon', 'yr', 'cz'],
+};
+function sourceOrder(data, loc) {
+  if (data.cz) return SOURCE_ORDER.cz; // CZ je jen do 20 km od českých okresních měst
+  if (loc.lat >= 55) return SOURCE_ORDER.north;
+  return SOURCE_ORDER.europe;
+}
+
+// Hodnota z prvního zdroje v pořadí, který ji pro danou hodinu má
 function preferredSource(data, key, field) {
-  const cz = data.cz?.hourly.get(key)?.[field];
-  if (cz != null) return { id: 'cz', label: 'CZ', hourly: (k) => data.cz.hourly.get(k)?.[field], now: cz };
-  return { id: 'yr', label: 'NOR', hourly: (k) => data.yr?.hourly.get(k)?.[field], now: data.yr?.hourly.get(key)?.[field] };
+  const order = data.order || SOURCE_ORDER.europe;
+  const id = order.find((s) => data[s]?.hourly.get(key)?.[field] != null) || order[0];
+  const label = SOURCES.find((s) => s.id === id)?.label || id;
+  return { id, label, hourly: (k) => data[id]?.hourly.get(k)?.[field], now: data[id]?.hourly.get(key)?.[field] };
 }
 const rainSource = (data, key) => preferredSource(data, key, 'rain');
 // Sníh (mm vody za hodinu): snížek do 1, sníh do 3, závěje od 3
@@ -652,7 +666,9 @@ function renderGauges(cur, dayMax, rain, cloud) {
 function renderNow(loc, data, region, tz) {
   const key = hourKey(new Date(), tz);
   const cur = Object.fromEntries(SOURCES.map((s) => [s.id, data[s.id]?.hourly.get(key)]));
-  const main = cur.yr || cur.icon || cur.ecmwf;
+  // Hlavní zdroj pro teplotu a vítr podle oblasti; symbol počasí (bouřka, mlha) má jen NOR a GER/EU
+  const mainId = data.order.find((s) => cur[s]?.temp != null);
+  const main = mainId ? { ...cur[mainId], symbol: cur[mainId].symbol || cur.yr?.symbol } : null;
   // Denní maximum z modelů s celým dnem (yr.no má pro dnešek jen zbývající hodiny)
   const today = dayOf(key);
   const dayMax = [data.icon, data.ecmwf, data.cz, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
@@ -711,7 +727,7 @@ function renderNow(loc, data, region, tz) {
       ${renderUv(uvLevel(data, tz), tz)}
       ${renderCar(carInfo(data, tz))}
       <div class="models">
-        ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
+        ${data.order.map((id) => SOURCES.find((s) => s.id === id)).filter((s) => cur[s.id]).map((s) => `<span class="${s.id === mainId ? 'primary' : ''}">${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
       </div>
       <div class="agree">${agree}</div>
     ` : '<p class="error">Aktuální data se nepodařilo načíst.</p>'}
@@ -1125,6 +1141,7 @@ async function show(loc) {
     ecmwf: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.ecmwf) : null,
     uv: uv.status === 'fulfilled' ? uv.value : null,
   };
+  data.order = sourceOrder(data, loc);
   const region = chmi.status === 'fulfilled' ? findRegion(chmi.value, loc) : null;
 
   renderNow(loc, data, region, tz);

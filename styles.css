@@ -304,3 +304,7 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 @media (prefers-color-scheme: dark) {
   .gauge-icon.dark-cloud { fill: #64748b; }
 }
+
+/* Hlavní zdroj pro dané místo */
+.models .primary { font-weight: 700; }
+.models .primary::after { content: " ★"; color: var(--muted); font-size: .8em; }
