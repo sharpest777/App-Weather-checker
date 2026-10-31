@@ -530,42 +530,77 @@ function renderChart(data, tz) {
     return `<rect x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" rx="${Math.min(2, barW / 2)}" fill="var(--c-rain)"><title>${fmtRain(r)}/h</title></rect>`;
   }).join('');
 
-  // Jednotlivé zdroje tence a průhledně, průměr výrazně s výplní pod křivkou
-  const pts = (vals) => vals.map((t, i) => (t == null ? null : [x(i), y(t)]));
-  const lines = SOURCES.map((s) => {
-    const d = smoothPath(pts(keys.map((k) => data[s.id]?.hourly.get(k)?.temp ?? null)));
-    return d ? `<path d="${d}" class="src-line" stroke="var(--c-${s.id})"/>` : '';
-  }).join('');
-  const avgPts = pts(avgT);
+  // Jedna křivka průměrné teploty s výplní pod ní
+  const avgPts = avgT.map((t, i) => (t == null ? null : [x(i), y(t)]));
   const avgPath = smoothPath(avgPts);
   const valid = avgPts.filter(Boolean);
   const area = valid.length > 1
     ? `${avgPath} L${valid.at(-1)[0].toFixed(1)},${plotB} L${valid[0][0].toFixed(1)},${plotB} Z`
     : '';
 
-  // Popisky nejteplejší a nejchladnější hodiny průměru
+  // Hodnoty teploty podél křivky: každé 3 hodiny (na mobilu každých 6) + nejteplejší a nejchladnější hodina
+  const valueEvery = narrow ? 6 : 3;
   const iMax = avgT.reduce((b, t, i) => (t != null && (b < 0 || t > avgT[b]) ? i : b), -1);
   const iMin = avgT.reduce((b, t, i) => (t != null && (b < 0 || t < avgT[b]) ? i : b), -1);
-  const marks = [[iMax, -10], [iMin, 20]].filter(([i]) => i >= 0).map(([i, dy]) => `
-    <circle cx="${x(i)}" cy="${y(avgT[i])}" r="4" class="avg-dot"/>
-    <text x="${Math.min(Math.max(x(i), padL + 14), W - padR - 14)}" y="${y(avgT[i]) + dy}" text-anchor="middle" class="avg-label">${fmtTemp(avgT[i])}</text>`).join('');
+  const labelled = new Set();
+  keys.forEach((k, i) => { if (avgT[i] != null && Number(k.slice(11)) % valueEvery === 0) labelled.add(i); });
+  for (const i of [iMax, iMin]) {
+    if (i < 0) continue;
+    // Extrém nahradí běžný popisek, který by s ním kolidoval
+    for (const j of [...labelled]) if (Math.abs(j - i) < valueEvery && j !== i) labelled.delete(j);
+    labelled.add(i);
+  }
+  const values = [...labelled].map((i) => {
+    const extreme = i === iMax || i === iMin;
+    const below = i === iMin && iMin !== iMax;
+    const tx = Math.min(Math.max(x(i), padL + 12), W - padR - 12);
+    return `<circle cx="${x(i)}" cy="${y(avgT[i])}" r="${extreme ? 4.5 : 3}" class="t-dot${extreme ? ' extreme' : ''}"/>
+      <text x="${tx}" y="${y(avgT[i]) + (below ? 20 : -10)}" text-anchor="middle" class="t-value${extreme ? ' extreme' : ''}">${fmtTemp(avgT[i])}</text>`;
+  }).join('');
 
+  // Barva čáry podle teploty: nahoře teplá, dole studená (gradient v souřadnicích grafu)
   $('#chart').innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graf teploty na 48 hodin">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graf průměrné teploty na 48 hodin">
       <defs>
-        <linearGradient id="avg-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="var(--c-avg)" stop-opacity=".28"/>
-          <stop offset="100%" stop-color="var(--c-avg)" stop-opacity="0"/>
+        <linearGradient id="temp-stroke" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${y(tMax)}" y2="${y(tMin)}">
+          ${tempStops(tMax, tMin, 1)}
+        </linearGradient>
+        <linearGradient id="temp-fill" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${y(tMax)}" y2="${plotB}">
+          ${tempStops(tMax, tMin, 0.28, 0.03)}
         </linearGradient>
       </defs>
       ${night}${grid}
       <line class="axis" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>
       ${rainBars}
-      ${area ? `<path d="${area}" fill="url(#avg-fill)"/>` : ''}
-      ${lines}
+      ${area ? `<path d="${area}" fill="url(#temp-fill)"/>` : ''}
       ${avgPath ? `<path d="${avgPath}" class="avg-line"/>` : ''}
-      ${marks}
+      ${values}
     </svg>`;
+}
+
+// Teplotní barevná škála: mráz modrá, chladno tyrkysová, mírno zelená, teplo jantarová až červená
+const TEMP_COLORS = [
+  [-10, [79, 70, 229]], [0, [37, 99, 235]], [7, [13, 148, 136]], [14, [101, 163, 13]],
+  [20, [217, 119, 6]], [26, [234, 88, 12]], [32, [220, 38, 38]],
+];
+function tempColor(t) {
+  const c = TEMP_COLORS;
+  if (t <= c[0][0]) return `rgb(${c[0][1]})`;
+  for (let i = 1; i < c.length; i++) {
+    if (t <= c[i][0]) {
+      const f = (t - c[i - 1][0]) / (c[i][0] - c[i - 1][0]);
+      return `rgb(${c[i - 1][1].map((v, j) => Math.round(v + (c[i][1][j] - v) * f)).join(',')})`;
+    }
+  }
+  return `rgb(${c.at(-1)[1]})`;
+}
+// Zastávky gradientu od tMax (nahoře) po tMin (dole); průhlednost se může směrem dolů měnit
+function tempStops(tMax, tMin, opTop, opBottom = opTop) {
+  const n = 6;
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const f = i / n;
+    return `<stop offset="${(f * 100).toFixed(0)}%" style="stop-color: ${tempColor(tMax - (tMax - tMin) * f)}; stop-opacity: ${(opTop + (opBottom - opTop) * f).toFixed(2)}"/>`;
+  }).join('');
 }
 
 // Hladká křivka přes body (Catmull-Rom převedený na Bézierovy oblouky); null přeruší čáru
