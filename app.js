@@ -584,7 +584,7 @@ function renderGauges(cur, dayMax, rain, cloud) {
   if (cur.temp == null) return '';
   const feels = cur.feels ?? feelsLike(cur.temp, cur.wind);
   const cloth = levelOf(CLOTHES, feels);
-  const feelsNote = Math.abs(feels - cur.temp) >= 1 ? ` · pocitově ${fmtTemp(feels)}` : '';
+  const feelsNote = ` · pocitově ${fmtTemp(feels)}`;
 
   let windHtml = '';
   if (cur.wind != null) {
@@ -723,7 +723,6 @@ function renderNow(loc, data, region, tz) {
           <div>
             <div class="now-temp">${fmtTemp(main.temp)}</div>
             <div class="now-desc">${esc(sky.text)}</div>
-            <div class="now-feels" title="Pocitová teplota – zohledňuje vítr, vlhkost i slunce">pocitově <strong>${fmtTemp(main.feels)}</strong></div>
           </div>
         </div>
         ${renderGauges(main, dayMax, rain, cloud)}
@@ -1153,8 +1152,9 @@ async function loadRadarFrames() {
 
 function radarLayer(i) {
   if (!radar.layers[i]) {
-    // Barevné schéma 2, vyhlazení 1, sníh odlišen 1. RainViewer má radar jen do zoomu 7, víc se dopočítá zvětšením.
-    radar.layers[i] = L.tileLayer(`${radar.host}${radar.frames[i].path}/256/{z}/{x}/{y}/2/1_1.png`, {
+    // Barevné schéma 2, bez vyhlazení (0) – skvrny jsou přesně tam, kde je radar naměřil, sníh odlišen (1).
+    // RainViewer má radar jen do zoomu 7, víc se dopočítá zvětšením.
+    radar.layers[i] = L.tileLayer(`${radar.host}${radar.frames[i].path}/256/{z}/{x}/{y}/2/0_1.png`, {
       opacity: 0, maxNativeZoom: 7, maxZoom: 10, zIndex: 10,
     }).addTo(radar.map);
   }

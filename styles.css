@@ -139,8 +139,6 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .now-emoji { font-size: 3rem; line-height: 1; }
 .now-temp { font-size: 3rem; font-weight: 600; line-height: 1; }
 .now-desc { color: var(--muted); }
-.now-feels { color: var(--muted); font-size: .9rem; }
-.now-feels strong { color: var(--text); }
 .now-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin: 8px 0 12px; }
 .now-grid .now-main { margin: 0; }
 .gauges { flex: 1 1 260px; display: grid; gap: 12px; }
