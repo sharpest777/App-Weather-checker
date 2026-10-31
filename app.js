@@ -108,12 +108,16 @@ async function loadOpenMeteo(loc) {
   return getJson(`https://api.open-meteo.com/v1/forecast?${params}`);
 }
 
-// UV index – Open-Meteo ho má jen v základní předpovědi, ne pro jednotlivé modely.
-// Vrací Map(klíč hodiny -> UV index).
+// UV index a pocitová teplota – Open-Meteo je má jen v základní předpovědi, ne pro jednotlivé modely.
+// Pocitová teplota zohledňuje vítr, vlhkost i sluneční záření.
+// Vrací { uv, feels }: Map(klíč hodiny -> hodnota).
 async function loadUv(loc) {
-  const params = new URLSearchParams({ latitude: loc.lat, longitude: loc.lon, hourly: 'uv_index', timezone: 'auto', forecast_days: '2' });
+  const params = new URLSearchParams({
+    latitude: loc.lat, longitude: loc.lon, hourly: 'uv_index,apparent_temperature', timezone: 'auto', forecast_days: '2',
+  });
   const res = await getJson(`https://api.open-meteo.com/v1/forecast?${params}`);
-  return new Map(res.hourly.time.map((t, i) => [t.slice(0, 13), res.hourly.uv_index[i]]));
+  const map = (field) => new Map(res.hourly.time.map((t, i) => [t.slice(0, 13), res.hourly[field][i]]));
+  return { uv: map('uv_index'), feels: map('apparent_temperature') };
 }
 
 // Textová předpověď ČHMÚ – stahuje ji GitHub Action do data/chmi.json
@@ -579,7 +583,7 @@ function skySymbol(level, night) {
 
 function renderGauges(cur, dayMax, rain, cloud) {
   if (cur.temp == null) return '';
-  const feels = feelsLike(cur.temp, cur.wind);
+  const feels = cur.feels ?? feelsLike(cur.temp, cur.wind);
   const cloth = levelOf(CLOTHES, feels);
   const feelsNote = Math.abs(feels - cur.temp) >= 1 ? ` · pocitově ${fmtTemp(feels)}` : '';
 
@@ -669,6 +673,8 @@ function renderNow(loc, data, region, tz) {
   // Hlavní zdroj pro teplotu a vítr podle oblasti; symbol počasí (bouřka, mlha) má jen NOR a GER/EU
   const mainId = data.order.find((s) => cur[s]?.temp != null);
   const main = mainId ? { ...cur[mainId], symbol: cur[mainId].symbol || cur.yr?.symbol } : null;
+  // Pocitová teplota z Open-Meteo, když chybí, odhad ochlazení větrem
+  if (main) main.feels = data.feels?.get(key) ?? feelsLike(main.temp, main.wind);
   // Denní maximum z modelů s celým dnem (yr.no má pro dnešek jen zbývající hodiny)
   const today = dayOf(key);
   const dayMax = [data.icon, data.ecmwf, data.cz, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
@@ -718,6 +724,7 @@ function renderNow(loc, data, region, tz) {
           <div>
             <div class="now-temp">${fmtTemp(main.temp)}</div>
             <div class="now-desc">${esc(sky.text)}</div>
+            <div class="now-feels" title="Pocitová teplota – zohledňuje vítr, vlhkost i slunce">pocitově <strong>${fmtTemp(main.feels)}</strong></div>
           </div>
         </div>
         ${renderGauges(main, dayMax, rain, cloud)}
@@ -1171,7 +1178,8 @@ async function show(loc) {
     yr: yr.status === 'fulfilled' ? normalizeYr(yr.value, tz) : null,
     icon: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.icon) : null,
     ecmwf: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.ecmwf) : null,
-    uv: uv.status === 'fulfilled' ? uv.value : null,
+    uv: uv.status === 'fulfilled' ? uv.value.uv : null,
+    feels: uv.status === 'fulfilled' ? uv.value.feels : null,
   };
   data.order = sourceOrder(data, loc);
   const region = chmi.status === 'fulfilled' ? findRegion(chmi.value, loc) : null;
