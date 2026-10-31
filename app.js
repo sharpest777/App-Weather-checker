@@ -108,6 +108,14 @@ async function loadOpenMeteo(loc) {
   return getJson(`https://api.open-meteo.com/v1/forecast?${params}`);
 }
 
+// UV index – Open-Meteo ho má jen v základní předpovědi, ne pro jednotlivé modely.
+// Vrací Map(klíč hodiny -> UV index).
+async function loadUv(loc) {
+  const params = new URLSearchParams({ latitude: loc.lat, longitude: loc.lon, hourly: 'uv_index', timezone: 'auto', forecast_days: '2' });
+  const res = await getJson(`https://api.open-meteo.com/v1/forecast?${params}`);
+  return new Map(res.hourly.time.map((t, i) => [t.slice(0, 13), res.hourly.uv_index[i]]));
+}
+
 // Textová předpověď ČHMÚ – stahuje ji GitHub Action do data/chmi.json
 let chmiCache = null;
 async function loadChmi() {
@@ -380,6 +388,38 @@ function stormLevel(data, tz) {
   return level ? { ...STORMS[level], from: first, hail } : null;
 }
 
+// ---------- Varování před UV zářením ----------
+
+// UV index: 3–5 střední, 6–7 vysoké, od 8 velmi vysoké (pak i opalovací krém)
+const UVS = [
+  { level: 1, from: 3, label: 'Střední UV záření', icon: '🔆' },
+  { level: 2, from: 6, label: 'Vysoké UV záření', icon: '🔆🔆' },
+  { level: 3, from: 8, label: 'Velmi vysoké UV záření', icon: '🔆🔆🔆🧴' },
+];
+
+// Nejvyšší UV index v příštích 12 hodinách a kdy nastane
+function uvLevel(data, tz) {
+  if (!data.uv) return null;
+  let max = 0;
+  let at = null;
+  for (let i = 0; i < STORM_HOURS; i++) {
+    const t = Date.now() + i * 3600e3;
+    const v = data.uv.get(hourKey(new Date(t), tz));
+    if (v != null && v > max) { max = v; at = Math.floor(t / 3600e3) * 3600e3; } // celá hodina
+  }
+  const lvl = [...UVS].reverse().find((u) => max >= u.from);
+  return lvl ? { ...lvl, max, at } : null;
+}
+
+function renderUv(uv, tz) {
+  if (!uv) return '';
+  const when = new Date(uv.at).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+  return `<div class="storm uv-${uv.level}" role="note">
+    <span class="storm-icon" aria-hidden="true">${uv.icon}</span>
+    <span><strong>${uv.label}</strong> <span class="storm-when">UV až ${Math.round(uv.max)} kolem ${when}${uv.level === 3 ? ' · namaž se opalovacím krémem' : ''}</span></span>
+  </div>`;
+}
+
 function renderStorm(storm, tz) {
   if (!storm) return '';
   const when = storm.from - Date.now() < 3600e3
@@ -517,6 +557,7 @@ function renderNow(loc, data, region, tz) {
         ${renderGauges(main, dayMax, rain, preferredSource(data, key, 'cloud'))}
       </div>
       ${renderStorm(stormLevel(data, tz), tz)}
+      ${renderUv(uvLevel(data, tz), tz)}
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
       </div>
@@ -921,7 +962,7 @@ async function show(loc) {
   $('#now').innerHTML = `<p class="muted">Načítám ${esc(loc.name)}…</p>`;
   moveRadar(loc);
 
-  const [yr, om, chmi, aladin] = await Promise.allSettled([loadYr(loc), loadOpenMeteo(loc), loadChmi(), loadAladin()]);
+  const [yr, om, chmi, aladin, uv] = await Promise.allSettled([loadYr(loc), loadOpenMeteo(loc), loadChmi(), loadAladin(), loadUv(loc)]);
   if (loc !== currentLoc) return; // mezitím si uživatel vybral jiné místo
 
   const tz = om.status === 'fulfilled' ? om.value.timezone : 'Europe/Prague';
@@ -930,6 +971,7 @@ async function show(loc) {
     yr: yr.status === 'fulfilled' ? normalizeYr(yr.value, tz) : null,
     icon: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.icon) : null,
     ecmwf: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.ecmwf) : null,
+    uv: uv.status === 'fulfilled' ? uv.value : null,
   };
   const region = chmi.status === 'fulfilled' ? findRegion(chmi.value, loc) : null;
 

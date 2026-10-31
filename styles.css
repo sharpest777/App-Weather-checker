@@ -278,3 +278,14 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
   .storm-1 { background: #422006; color: #fde68a; }
   .storm-2 { background: #7c2d12; color: #fed7aa; }
 }
+
+/* Varování před UV zářením */
+.uv-1 { background: #fef08a; color: #713f12; }
+.uv-2 { background: #fdba74; color: #7c2d12; }
+.uv-3 { background: #b91c1c; color: #fff; font-weight: 600; }
+.uv-3 .storm-icon { font-size: 1.2rem; }
+@media (prefers-color-scheme: dark) {
+  .uv-1 { background: #3f3a06; color: #fef08a; }
+  .uv-2 { background: #7c2d12; color: #fed7aa; }
+}
+.storm + .storm { margin-left: 8px; }
