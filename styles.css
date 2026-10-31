@@ -146,6 +146,8 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .gauge-icon { width: 34px; height: 34px; flex: none; fill: var(--text); transition: transform .4s; }
 .gauge-icon.outline { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .rain-drop { fill: #2563eb; }
+.sky-emoji { display: inline-flex; align-items: center; justify-content: center; font-size: 28px; line-height: 1; }
+.gauge-icon.dark-cloud { fill: #1e293b; }
 .snow-flake { display: inline-flex; align-items: center; justify-content: center; font-size: 28px; line-height: 1; }
 .umbrella .canopy { fill: #2563eb; }
 .umbrella .handle { fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; }
@@ -298,4 +300,7 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
   .hail { background: #0c4a6e; color: #e0f2fe; }
   .hail.severe { background: #e0f2fe; color: #0c4a6e; }
   .car { background: #1e3a8a; color: #dbeafe; }
+}
+@media (prefers-color-scheme: dark) {
+  .gauge-icon.dark-cloud { fill: #64748b; }
 }

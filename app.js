@@ -574,7 +574,10 @@ function renderGauges(cur, dayMax, rain, cloud) {
     const umbrella = !rain?.snow && (rain?.soonMax ?? 0) >= RAINS[1].from;
     const icon = umbrella
       ? `<svg class="gauge-icon umbrella" viewBox="0 0 24 24" role="img" aria-label="vezmi si deštník"><title>Do ${RAIN_SOON_HOURS} hodin má pršet až ${fmtRain(rain.soonMax)}/h</title><path class="canopy" d="M2 12a10 10 0 0 1 20 0z"/><path class="handle" d="M12 12v7a2 2 0 0 1-4 0"/></svg>`
-      : '<svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>';
+      // Jinak podle oblohy: jasno slunce, polojasno slunce s mraky, oblačno tmavý mrak
+      : c.id === 'jasno' ? '<span class="gauge-icon sky-emoji" role="img" aria-label="jasno">☀️</span>'
+      : c.id === 'polojasno' ? '<span class="gauge-icon sky-emoji" role="img" aria-label="polojasno">⛅</span>'
+      : '<svg class="gauge-icon dark-cloud" viewBox="0 0 24 24" aria-label="oblačno"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>';
     cloudHtml = `
       <div class="gauge">
         ${icon}
