@@ -13,6 +13,7 @@
   --c-cloth: #7c3aed;
   --c-wind: #0891b2;
   --c-rainmeter: #2563eb;
+  --c-cloud: #64748b;
   --radius: 14px;
   color-scheme: light;
 }
@@ -33,6 +34,7 @@
     --c-cloth: #7c3aed;
     --c-wind: #0e7490;
     --c-rainmeter: #1d4ed8;
+    --c-cloud: #475569;
     color-scheme: dark;
   }
 }

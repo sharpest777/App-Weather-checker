@@ -88,6 +88,7 @@ async function loadYr(loc) {
     temp: t.data.instant.details.air_temperature,
     wind: t.data.instant.details.wind_speed,
     dir: t.data.instant.details.wind_from_direction,
+    cloud: t.data.instant.details.cloud_area_fraction,
     rain1: t.data.next_1_hours?.details?.precipitation_amount,
     rain6: t.data.next_6_hours?.details?.precipitation_amount,
     symbol: t.data.next_1_hours?.summary?.symbol_code || t.data.next_6_hours?.summary?.symbol_code,
@@ -153,9 +154,12 @@ function normalizeAladin(json, loc, tz) {
     const h = Number(key.slice(11));
     const night = h < 6 || h >= 20;
     const temp = best.t[i];
+    // Srážky v datech platí za hodinu končící časem i; hodina začínající časem i je tedy i+1
+    // (stejně jako u yr.no, kde jsou srážky „na příští hodinu“)
+    const rainNext = best.p[i + 1] ?? null;
     hourly.set(key, {
-      temp, rain: best.p[i], wind: best.w[i], dir: best.d[i],
-      symbol: aladinSymbol(best.c[i], best.p[i], temp, night),
+      temp, rain: rainNext, wind: best.w[i], dir: best.d[i], cloud: best.c[i],
+      symbol: aladinSymbol(best.c[i], rainNext, temp, night),
     });
     if (temp == null) return;
     const day = dayOf(key);
@@ -188,7 +192,10 @@ function normalizeYr(series, tz) {
   let coveredUntil = 0;
   for (const s of series) {
     const key = hourKey(s.time, tz);
-    hourly.set(key, { temp: s.temp, rain: s.rain1 ?? null, wind: s.wind, dir: s.dir, symbol: yrSymbol(s.symbol) });
+    hourly.set(key, {
+      temp: s.temp, rain: s.rain1 ?? null, wind: s.wind, dir: s.dir,
+      cloud: s.cloud == null ? null : s.cloud / 100, symbol: yrSymbol(s.symbol),
+    });
 
     const day = dayOf(key);
     const d = daily.get(day) || { max: -Infinity, min: Infinity, rain: 0, symbols: [] };
@@ -323,7 +330,22 @@ function meter(scale, active, color) {
 // Šipka větru je oranžová, když je den teplý (nejvyšší denní teplota aspoň tolik °C), jinak modrá
 const WARM_DAY_FROM = 15;
 
-function renderGauges(cur, dayMax) {
+// Srážky a oblačnost bere přednostně z CZ (ALADIN, 1 km), kde CZ není, z NOR (yr.no)
+function preferredSource(data, key, field) {
+  const cz = data.cz?.hourly.get(key)?.[field];
+  if (cz != null) return { id: 'cz', label: 'CZ', hourly: (k) => data.cz.hourly.get(k)?.[field], now: cz };
+  return { id: 'yr', label: 'NOR', hourly: (k) => data.yr?.hourly.get(k)?.[field], now: data.yr?.hourly.get(key)?.[field] };
+}
+const rainSource = (data, key) => preferredSource(data, key, 'rain');
+
+// Oblačnost (podíl oblohy 0–1): jasno do 30 %, polojasno do 70 %, oblačno od 70 %
+const CLOUDS = [
+  { id: 'jasno', label: 'Jasno', from: 0 },
+  { id: 'polojasno', label: 'Polojasno', from: 0.3 },
+  { id: 'oblacno', label: 'Oblačno', from: 0.7 },
+];
+
+function renderGauges(cur, dayMax, rain, cloud) {
   if (cur.temp == null) return '';
   const feels = feelsLike(cur.temp, cur.wind);
   const cloth = levelOf(CLOTHES, feels);
@@ -348,14 +370,27 @@ function renderGauges(cur, dayMax) {
   }
 
   let rainHtml = '';
-  if (cur.rain != null) {
-    const r = cur.rain >= RAINS[0].from ? levelOf(RAINS, cur.rain) : null;
+  if (rain?.now != null) {
+    const r = rain.now >= RAINS[0].from ? levelOf(RAINS, rain.now) : null;
     rainHtml = `
       <div class="gauge">
         <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>
         <div class="gauge-body">
-          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(cur.rain)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span></div>
+          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(rain.now)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span> <span class="src ${rain.id}">(${rain.label})</span></div>
           ${meter(RAINS, r, '--c-rainmeter')}
+        </div>
+      </div>`;
+  }
+
+  let cloudHtml = '';
+  if (cloud?.now != null) {
+    const c = levelOf(CLOUDS, cloud.now);
+    cloudHtml = `
+      <div class="gauge">
+        <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>
+        <div class="gauge-body">
+          <div class="gauge-title">Obloha <strong>${c.label.toLowerCase()}</strong> <span class="muted">${Math.round(cloud.now * 100)} % mraků</span> <span class="src ${cloud.id}">(${cloud.label})</span></div>
+          ${meter(CLOUDS, c, '--c-cloud')}
         </div>
       </div>`;
   }
@@ -371,6 +406,7 @@ function renderGauges(cur, dayMax) {
       </div>
       ${windHtml}
       ${rainHtml}
+      ${cloudHtml}
     </div>`;
 }
 
@@ -406,7 +442,7 @@ function renderNow(loc, data, region, tz) {
             <div class="now-desc">${esc(main.symbol.text)}</div>
           </div>
         </div>
-        ${renderGauges(main, dayMax)}
+        ${renderGauges(main, dayMax, rainSource(data, key), preferredSource(data, key, 'cloud'))}
       </div>
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
@@ -436,9 +472,11 @@ function renderChart(data, tz) {
   const x = (i) => padL + (i / (keys.length - 1)) * (W - padL - padR);
   const y = (t) => padT + (1 - (t - tMin) / (tMax - tMin)) * (H - padT - padB);
 
-  // Srážky (yr.no) jako sloupce u spodního okraje, 5 mm = plná výška 60 px
+  // Srážky (CZ, jinak NOR) jako sloupce u spodního okraje, 5 mm = plná výška 60 px
+  const rain = rainSource(data, keys[0]);
+  $('#rain-legend').textContent = `srážky (${rain.label})`;
   const rainBars = keys.map((k, i) => {
-    const r = data.yr?.hourly.get(k)?.rain;
+    const r = rain.hourly(k);
     if (!r) return '';
     const h = Math.min(60, (r / 5) * 60);
     return `<rect x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" fill="var(--c-rain)" rx="1"/>`;
