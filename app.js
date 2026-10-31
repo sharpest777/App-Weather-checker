@@ -337,6 +337,14 @@ function preferredSource(data, key, field) {
   return { id: 'yr', label: 'NOR', hourly: (k) => data.yr?.hourly.get(k)?.[field], now: data.yr?.hourly.get(key)?.[field] };
 }
 const rainSource = (data, key) => preferredSource(data, key, 'rain');
+// Sníh (mm vody za hodinu): snížek do 1, sníh do 3, závěje od 3
+const SNOWS = [
+  { id: 'snizek', label: 'Snížek', from: 0.1 },
+  { id: 'snih', label: 'Sníh', from: 1 },
+  { id: 'zaveje', label: 'Závěje', from: 3 },
+];
+// Sněží, když to říká symbol počasí (yr.no), nebo když je při srážkách teplota do 0,5 °C
+const isSnow = (cur) => cur?.symbol?.emoji === '🌨️' || (cur?.temp != null && cur.temp <= 0.5);
 const RAIN_SOON_HOURS = 6; // na kolik hodin dopředu hlídat déšť kvůli deštníku
 
 // Oblačnost (podíl oblohy 0–1): jasno do 30 %, polojasno do 70 %, oblačno od 70 %
@@ -372,16 +380,20 @@ function renderGauges(cur, dayMax, rain, cloud) {
 
   let rainHtml = '';
   if (rain?.now != null) {
-    const r = rain.now >= RAINS[0].from ? levelOf(RAINS, rain.now) : null;
+    // Při sněžení vločka a stupnice sněhu, jinak kapka a stupnice deště
+    const scale = rain.snow ? SNOWS : RAINS;
+    const r = rain.now >= scale[0].from ? levelOf(scale, rain.now) : null;
+    let icon;
+    if (r && rain.snow) icon = '<span class="gauge-icon snow-flake" role="img" aria-label="sněžení">❄️</span>';
+    else if (r) icon = '<svg class="gauge-icon rain-drop" viewBox="0 0 24 24" aria-label="srážky"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>';
+    // Bez srážek: přeškrtnutá prázdná kapka
+    else icon = '<svg class="gauge-icon outline dry" viewBox="0 0 24 24" aria-label="sucho"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5zM4 4l16 16"/></svg>';
     rainHtml = `
       <div class="gauge">
-        ${r
-          ? '<svg class="gauge-icon rain-drop" viewBox="0 0 24 24" aria-label="srážky"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>'
-          // Bez srážek: přeškrtnutá prázdná kapka
-          : '<svg class="gauge-icon outline dry" viewBox="0 0 24 24" aria-label="sucho"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5zM4 4l16 16"/></svg>'}
+        ${icon}
         <div class="gauge-body">
-          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(rain.now)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span></div>
-          ${meter(RAINS, r, '--c-rainmeter')}
+          <div class="gauge-title">${rain.snow && r ? 'Sněžení' : 'Srážky'} ${r ? `<strong>${fmtRain(rain.now)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span></div>
+          ${meter(scale, r, rain.snow ? '--c-snowmeter' : '--c-rainmeter')}
         </div>
       </div>`;
   }
@@ -390,7 +402,7 @@ function renderGauges(cur, dayMax, rain, cloud) {
   if (cloud?.now != null) {
     const c = levelOf(CLOUDS, cloud.now);
     // Když má v příštích hodinách pršet středně nebo silně, místo mraku deštník
-    const umbrella = (rain?.soonMax ?? 0) >= RAINS[1].from;
+    const umbrella = !rain?.snow && (rain?.soonMax ?? 0) >= RAINS[1].from;
     const icon = umbrella
       ? `<svg class="gauge-icon umbrella" viewBox="0 0 24 24" role="img" aria-label="vezmi si deštník"><title>Do ${RAIN_SOON_HOURS} hodin má pršet až ${fmtRain(rain.soonMax)}/h</title><path class="canopy" d="M2 12a10 10 0 0 1 20 0z"/><path class="handle" d="M12 12v7a2 2 0 0 1-4 0"/></svg>`
       : '<svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>';
@@ -433,6 +445,7 @@ function renderNow(loc, data, region, tz) {
   const soon = [];
   for (let i = 0; i < RAIN_SOON_HOURS; i++) soon.push(rain.hourly(hourKey(new Date(Date.now() + i * 3600e3), tz)) ?? 0);
   rain.soonMax = Math.max(...soon);
+  rain.snow = isSnow(main);
 
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
   let agree = '';
