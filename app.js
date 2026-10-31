@@ -556,6 +556,13 @@ const CLOUDS = [
   { id: 'oblacno', label: 'Oblačno', from: 0.7 },
 ];
 
+// Ikona a popis oblohy podle stupně oblačnosti (stejné názvy jako v ukazateli)
+function skySymbol(level, night) {
+  if (level.id === 'jasno') return { emoji: night ? '🌙' : '☀️', text: 'jasno' };
+  if (level.id === 'polojasno') return { emoji: night ? '☁️' : '⛅', text: 'polojasno' };
+  return { emoji: '☁️', text: 'oblačno' };
+}
+
 function renderGauges(cur, dayMax, rain, cloud) {
   if (cur.temp == null) return '';
   const feels = feelsLike(cur.temp, cur.wind);
@@ -659,6 +666,21 @@ function renderNow(loc, data, region, tz) {
   rain.snow = isSnow(main);
   rain.today = rainToday(data, rain, tz);
 
+  // Popis a ikona u teploty ze stejných dat jako ukazatele, aby si neodporovaly:
+  // déšť/sníh podle ukazatele srážek, jinak oblačnost podle ukazatele oblohy.
+  // Bouřku a mlhu oblačnost nevystihne, ty zůstávají ze symbolu počasí.
+  const cloud = preferredSource(data, key, 'cloud');
+  const sun = sunTimes(new Date(), loc.lat, loc.lon);
+  const night = sun.rise ? Date.now() < sun.rise || Date.now() > sun.set : !sun.polarDay;
+  const rainNow = rain.hourly(key) ?? 0;
+  let sky;
+  if (['⛈️', '🌫️'].includes(main?.symbol.emoji)) sky = main.symbol;
+  else if (rainNow >= 0.1) {
+    sky = rain.snow ? { emoji: '🌨️', text: 'sněžení' }
+      : rainNow >= RAINS[1].from ? { emoji: '🌧️', text: 'déšť' } : { emoji: '🌦️', text: 'slabý déšť' };
+  } else if (cloud.now != null) sky = skySymbol(levelOf(CLOUDS, cloud.now), night);
+  else sky = main?.symbol;
+
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
   let agree = '';
   if (temps.length >= 2) {
@@ -676,13 +698,13 @@ function renderNow(loc, data, region, tz) {
     ${main ? `
       <div class="now-grid">
         <div class="now-main">
-          <span class="now-emoji">${main.symbol.emoji}</span>
+          <span class="now-emoji">${sky.emoji}</span>
           <div>
             <div class="now-temp">${fmtTemp(main.temp)}</div>
-            <div class="now-desc">${esc(main.symbol.text)}</div>
+            <div class="now-desc">${esc(sky.text)}</div>
           </div>
         </div>
-        ${renderGauges(main, dayMax, rain, preferredSource(data, key, 'cloud'))}
+        ${renderGauges(main, dayMax, rain, cloud)}
       </div>
       ${renderStorm(stormLevel(data, tz), tz)}
       ${renderHail(hailInfo(data, tz), tz)}
