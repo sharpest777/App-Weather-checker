@@ -763,7 +763,7 @@ function renderChart(data, tz, loc) {
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
   const narrow = W < 500;
-  const H = narrow ? 256 : 296, padL = 14, padR = 14, padT = 34, padB = 50;
+  const H = narrow ? 282 : 322, padL = 14, padR = 14, padT = 34, padB = 76;
   const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
   const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
@@ -824,9 +824,22 @@ function renderChart(data, tz, loc) {
   keys.forEach((k, i) => {
     const h = Number(k.slice(11));
     if (h % labelEvery === 0) {
-      const label = h === 0 ? new Date(`${dayOf(k)}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' }) : `${h}:00`;
-      grid += `<text x="${x(i)}" y="${H - padB + 38}" text-anchor="middle" class="${h === 0 ? 'day-mark' : ''}">${label}</text>`;
+      grid += `<text x="${x(i)}" y="${H - padB + 38}" text-anchor="middle" class="${h === 0 ? 'day-mark' : ''}">${h}:00</text>`;
     }
+  });
+
+  // Pod hodinami úseky dnů: Dnes / Zítra / Pozítří, každý se závorkou přes své hodiny
+  const DAY_NAMES = ['Dnes', 'Zítra', 'Pozítří'];
+  const dayStarts = keys.map((k, i) => (i === 0 || k.slice(11) === '00' ? i : -1)).filter((i) => i >= 0);
+  dayStarts.forEach((s, n) => {
+    const e = n + 1 < dayStarts.length ? dayStarts[n + 1] : keys.length - 1;
+    const xa = x(s) + (n ? 2 : 0);
+    const xb = x(e) - 2;
+    if (xb - xa < 30 || !DAY_NAMES[n]) return; // příliš krátký úsek popisek nepotřebuje
+    const yLine = H - padB + 48;
+    grid += `<path class="day-span" d="M${xa},${yLine - 4} V${yLine} H${xb} V${yLine - 4}"/>`;
+    const date = new Date(`${dayOf(keys[s])}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric' });
+    grid += `<text x="${(xa + xb) / 2}" y="${yLine + 15}" text-anchor="middle" class="day-name-label">${DAY_NAMES[n]}${narrow ? '' : ` <tspan class="day-date">${date}</tspan>`}</text>`;
   });
 
   // Srážky (CZ, jinak NOR) jako sloupce v dolním pásu, 5 mm/h = plná výška

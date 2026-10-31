@@ -308,3 +308,8 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 /* Hlavní zdroj pro dané místo */
 .models .primary { font-weight: 700; }
 .models .primary::after { content: " ★"; color: var(--muted); font-size: .8em; }
+
+/* Úseky dnů pod grafem na 48 hodin */
+.chart .day-span { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: .6; }
+.chart .day-name-label { fill: var(--text); font-size: 13px; font-weight: 700; }
+.chart .day-date { fill: var(--muted); font-size: 11px; font-weight: 400; }
