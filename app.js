@@ -870,8 +870,10 @@ function renderChart(data, tz, loc) {
   const avgPts = avgT.map((t, i) => (t == null ? null : [x(i), y(t)]));
   const avgPath = smoothPath(avgPts);
   const valid = avgPts.filter(Boolean);
+  // Výplň pod křivkou sahá až k pásu se sluncem a měsícem a směrem dolů se vytrácí
+  const areaB = H - padB + 4;
   const area = valid.length > 1
-    ? `${avgPath} L${valid.at(-1)[0].toFixed(1)},${plotB} L${valid[0][0].toFixed(1)},${plotB} Z`
+    ? `${avgPath} L${valid.at(-1)[0].toFixed(1)},${areaB} L${valid[0][0].toFixed(1)},${areaB} Z`
     : '';
 
   // Hodnoty teploty podél křivky: každé 3 hodiny (na mobilu každých 6) + nejteplejší a nejchladnější hodina
@@ -901,14 +903,14 @@ function renderChart(data, tz, loc) {
         <linearGradient id="temp-stroke" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${y(tMax)}" y2="${y(tMin)}">
           ${tempStops(tMax, tMin, 1)}
         </linearGradient>
-        <linearGradient id="temp-fill" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${y(tMax)}" y2="${plotB}">
-          ${tempStops(tMax, tMin, 0.28, 0.03)}
+        <linearGradient id="temp-fill" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${y(tMax)}" y2="${areaB}">
+          ${tempStops(tMax, tMin, 0.32, 0)}
         </linearGradient>
       </defs>
-      ${bands}${grid}${sun}
-      <line class="axis" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>
-      ${rainBars}
+      ${bands}${grid}
       ${area ? `<path d="${area}" fill="url(#temp-fill)"/>` : ''}
+      ${sun}
+      ${rainBars}
       ${avgPath ? `<path d="${avgPath}" class="avg-line"/>` : ''}
       ${values}
     </svg>`;
