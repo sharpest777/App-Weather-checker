@@ -1044,8 +1044,10 @@ function renderChmi(chmi, region, error) {
   if (error) { el.innerHTML = '<p class="muted">Text ČHMÚ se nepodařilo načíst.</p>'; return; }
   if (!region) { el.innerHTML = '<p class="muted">Textová předpověď ČHMÚ je jen pro místa v Česku.</p>'; return; }
 
-  const now = Date.now();
-  const forecasts = region.forecasts.filter((f) => new Date(f.end).getTime() > now);
+  // Dnešek je v horní kartě, takže jen předpovědi od zítřka; předpověď na noc se vynechává
+  const today = dayOf(hourKey(new Date(), 'Europe/Prague'));
+  const forecasts = region.forecasts.filter((f) => f.kind !== 'CKn'
+    && dayOf(hourKey(new Date(f.start), 'Europe/Prague')) > today);
   if (!forecasts.length) { el.innerHTML = '<p class="muted">Pro tento kraj teď není aktuální předpověď.</p>'; return; }
 
   el.innerHTML = `
