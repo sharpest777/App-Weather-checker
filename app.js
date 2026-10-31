@@ -103,7 +103,7 @@ async function loadOpenMeteo(loc) {
     hourly: 'temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,weather_code',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code',
     models: Object.values(OM_MODELS).join(','),
-    timezone: 'auto', forecast_days: String(DAYS), wind_speed_unit: 'ms',
+    timezone: 'auto', forecast_days: String(DAYS + 1), wind_speed_unit: 'ms', // dnešek + 7 dní
   });
   return getJson(`https://api.open-meteo.com/v1/forecast?${params}`);
 }
@@ -981,7 +981,8 @@ function averageDay(data, day, today) {
 function renderDays(data, tz) {
   const today = dayOf(hourKey(new Date(), tz));
   const allDays = new Set();
-  for (const s of SOURCES) for (const d of data[s.id]?.daily.keys() || []) if (d >= today) allDays.add(d);
+  // Dnešek je podrobně v horní kartě, přehled začíná zítřkem
+  for (const s of SOURCES) for (const d of data[s.id]?.daily.keys() || []) if (d > today) allDays.add(d);
   const days = [...allDays].sort().slice(0, DAYS)
     .map((day) => ({ day, ...averageDay(data, day, today) }))
     .filter((d) => d.max != null);
@@ -1005,7 +1006,7 @@ function renderDays(data, tz) {
   days.forEach((d, i) => {
     const cx = x(i);
     if (i) svg += `<line class="grid" x1="${padL + colW * i}" x2="${padL + colW * i}" y1="8" y2="${H - 8}"/>`;
-    const label = i === 0 ? 'Dnes' : i === 1 ? 'Zítra' : new Date(`${d.day}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' });
+    const label = i === 0 ? 'Zítra' : new Date(`${d.day}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' });
     svg += `<text x="${cx}" y="20" text-anchor="middle" class="day-label">${label}</text>`;
     svg += `<text x="${cx}" y="44" text-anchor="middle" class="day-icon"><title>${esc(d.symbol.text)}</title>${d.symbol.emoji}</text>`;
     svg += `<text x="${cx}" y="${y(d.max) - 8}" text-anchor="middle" class="t-max">${fmtTemp(d.max)}</text>`;
