@@ -16,7 +16,7 @@
   --c-sunnight: #312e81;
   --c-sunrise: #f59e0b;
   --c-sunset: #6366f1;
-  --c-band-day: rgb(253 224 71 / .16);
+  --c-band-day: rgb(253 230 138 / .14);
   --c-band-night: rgb(30 27 75 / .09);
   --c-cold: #2563eb;
   --c-min: #2563eb;
@@ -48,7 +48,7 @@
     --c-sunnight: #1e1b4b;
     --c-sunrise: #fbbf24;
     --c-sunset: #818cf8;
-    --c-band-day: rgb(250 204 21 / .12);
+    --c-band-day: rgb(250 204 21 / .07);
     --c-band-night: rgb(0 0 0 / .28);
     --c-cold: #60a5fa;
     --c-min: #60a5fa;
@@ -250,6 +250,6 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .chart .sun-icon { font-size: 12px; }
 .chart .sunrise { stroke: var(--c-sunrise); stroke-width: 1.5; stroke-dasharray: 3 3; }
 .chart .sunset { stroke: var(--c-sunset); stroke-width: 1.5; stroke-dasharray: 3 3; }
-.chart .sun-time { fill: var(--muted); font-size: 11px; }
+.chart .sun-time { fill: var(--muted); font-size: 13px; }
 .chart .band-day { fill: var(--c-band-day); }
 .chart .band-night { fill: var(--c-band-night); }

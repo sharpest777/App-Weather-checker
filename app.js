@@ -496,7 +496,7 @@ function renderChart(data, tz, loc) {
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
   const narrow = W < 500;
-  const H = narrow ? 250 : 290, padL = 14, padR = 14, padT = 28, padB = 50;
+  const H = narrow ? 256 : 296, padL = 14, padR = 14, padT = 34, padB = 50;
   const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
   const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
@@ -539,14 +539,14 @@ function renderChart(data, tz, loc) {
     const xb = xt(e.t);
     const w = xb - xa;
     const cls = isDay ? 'sun-day' : 'sun-night';
-    bands += `<rect class="${isDay ? 'band-day' : 'band-night'}" x="${xa}" y="${padT - 10}" width="${Math.max(0, w)}" height="${stripY - padT + 10}"/>`;
+    bands += `<rect class="${isDay ? 'band-day' : 'band-night'}" x="${xa}" y="${padT - 22}" width="${Math.max(0, w)}" height="${stripY - padT + 22}"/>`;
     sun += `<rect class="${cls}" x="${xa}" y="${stripY}" width="${Math.max(0, w)}" height="${stripH}"><title>${isDay ? 'Den' : 'Noc'} ${fmtTime(segStart)}–${fmtTime(e.t)}</title></rect>`;
     if (w > 26) sun += `<text x="${(xa + xb) / 2}" y="${stripY + 12}" text-anchor="middle" class="sun-icon">${isDay ? '☀️' : '🌙'}</text>`;
     if (!e.end) {
       // Okamžik východu/západu: svislá čára přes graf a čas v pásu
-      sun += `<line class="${e.day ? 'sunrise' : 'sunset'}" x1="${xb}" x2="${xb}" y1="${padT - 10}" y2="${stripY + stripH}"/>`;
+      sun += `<line class="${e.day ? 'sunrise' : 'sunset'}" x1="${xb}" x2="${xb}" y1="${padT - 22}" y2="${stripY + stripH}"/>`;
       // 🌅 východ, 🌇 západ; na mobilu jen symbol, aby se popisky nepřekrývaly
-      sun += `<text x="${xb + 3}" y="${padT - 1}" class="sun-time"><title>${e.day ? 'Východ' : 'Západ'} slunce ${fmtTime(e.t)}</title>${e.day ? '🌅' : '🌇'}${narrow ? '' : ` ${fmtTime(e.t)}`}</text>`;
+      sun += `<text x="${xb + 3}" y="${padT - 6}" class="sun-time"><title>${e.day ? 'Východ' : 'Západ'} slunce ${fmtTime(e.t)}</title>${e.day ? '🌅' : '🌇'}${narrow ? '' : ` ${fmtTime(e.t)}`}</text>`;
       isDay = e.day;
       segStart = e.t;
     }
