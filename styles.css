@@ -12,8 +12,11 @@
   --c-max: #ea580c;
   --c-avg: #f97316;
   --c-warm: #f97316;
+  --c-sunday: #fde68a;
+  --c-sunnight: #312e81;
+  --c-sunrise: #f59e0b;
+  --c-sunset: #6366f1;
   --c-cold: #2563eb;
-  --c-night: rgb(15 23 42 / .04);
   --c-min: #2563eb;
   --c-rain: #93c5fd;
   --c-cloth: #7c3aed;
@@ -39,8 +42,11 @@
     --c-max: #fb923c;
     --c-avg: #fb923c;
     --c-warm: #fb923c;
+    --c-sunday: #a16207;
+    --c-sunnight: #1e1b4b;
+    --c-sunrise: #fbbf24;
+    --c-sunset: #818cf8;
     --c-cold: #60a5fa;
-    --c-night: rgb(0 0 0 / .18);
     --c-min: #60a5fa;
     --c-rain: #1d4ed8;
     --c-cloth: #7c3aed;
@@ -220,7 +226,6 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 /* Graf na 48 hodin */
 .line { display: inline-block; width: 16px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 .line.avg { background: linear-gradient(90deg, #2563eb, #0d9488, #65a30d, #d97706, #ea580c); }
-.chart .night { fill: var(--c-night); }
 .chart .axis { stroke: var(--line); }
 .chart .day-mark { fill: var(--text); font-weight: 600; }
 .chart .avg-line { fill: none; stroke: url(#temp-stroke); stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; }
@@ -236,3 +241,9 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
   stroke-linejoin: round;
 }
 .chart .t-value.extreme { font-size: 14px; font-weight: 700; }
+.chart .sun-day { fill: var(--c-sunday); }
+.chart .sun-night { fill: var(--c-sunnight); }
+.chart .sun-icon { font-size: 12px; }
+.chart .sunrise { stroke: var(--c-sunrise); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .sunset { stroke: var(--c-sunset); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .sun-time { fill: var(--muted); font-size: 10px; }

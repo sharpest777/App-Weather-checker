@@ -467,7 +467,28 @@ function renderNow(loc, data, region, tz) {
   `;
 }
 
-function renderChart(data, tz) {
+// Východ a západ slunce pro daný den (rovnice východu slunce, přesnost na pár minut).
+// Vrací časy v ms; za polárním kruhem rise/set chybí a polarDay říká, jestli je celý den světlo.
+function sunTimes(date, lat, lon) {
+  const rad = Math.PI / 180;
+  const jd = date.getTime() / 864e5 + 2440587.5;
+  const n = Math.round(jd - 2451545 + 0.0008);
+  const jStar = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * jStar) % 360;
+  const C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const lambda = (M + C + 180 + 102.9372) % 360;
+  const jTransit = 2451545 + jStar + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * lambda * rad);
+  const sinDec = Math.sin(lambda * rad) * Math.sin(23.4397 * rad);
+  const cosDec = Math.cos(Math.asin(sinDec));
+  const cosW = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * sinDec) / (Math.cos(lat * rad) * cosDec);
+  if (cosW > 1) return { polarDay: false };
+  if (cosW < -1) return { polarDay: true };
+  const w = Math.acos(cosW) / rad;
+  const toMs = (j) => (j - 2440587.5) * 864e5;
+  return { rise: toMs(jTransit - w / 360), set: toMs(jTransit + w / 360) };
+}
+
+function renderChart(data, tz, loc) {
   const start = new Date();
   const keys = [];
   for (let i = 0; i < CHART_HOURS; i++) keys.push(hourKey(new Date(start.getTime() + i * 3600e3), tz));
@@ -475,7 +496,7 @@ function renderChart(data, tz) {
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
   const narrow = W < 500;
-  const H = narrow ? 230 : 270, padL = 30, padR = 10, padT = 22, padB = 30;
+  const H = narrow ? 250 : 290, padL = 30, padR = 10, padT = 26, padB = 50;
   const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
   const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
@@ -492,17 +513,39 @@ function renderChart(data, tz) {
   const x = (i) => padL + (i / (keys.length - 1)) * (W - padL - padR);
   const y = (t) => padT + (1 - (t - tMin) / (tMax - tMin)) * (plotB - padT);
 
-  // Noc (20–6 h) jako jemně podbarvený pruh
-  let night = '';
-  let nightStart = null;
-  keys.forEach((k, i) => {
-    const h = Number(k.slice(11));
-    const isNight = h >= 20 || h < 6;
-    if (isNight && nightStart == null) nightStart = i;
-    if ((!isNight || i === keys.length - 1) && nightStart != null) {
-      const end = isNight ? i : i - 1;
-      night += `<rect class="night" x="${x(nightStart)}" y="${padT - 14}" width="${Math.max(0, x(end) - x(nightStart))}" height="${H - padB - padT + 14}"/>`;
-      nightStart = null;
+  // Den a noc podle skutečného východu a západu slunce: barevný pás pod grafem
+  // a jemné svislé čáry v okamžiku východu a západu
+  const t0 = start.getTime();
+  const t1 = t0 + (CHART_HOURS - 1) * 3600e3;
+  const xt = (t) => padL + ((t - t0) / (t1 - t0)) * (W - padL - padR);
+  const fmtTime = (t) => new Date(t).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+  const events = [];
+  for (let d = -1; d <= 3; d++) {
+    const st = sunTimes(new Date(t0 + d * 864e5), loc.lat, loc.lon);
+    if (st.rise) events.push({ t: st.rise, day: true });
+    if (st.set) events.push({ t: st.set, day: false });
+  }
+  events.sort((a, b) => a.t - b.t);
+  const before = events.filter((e) => e.t <= t0).at(-1);
+  let isDay = before ? before.day : sunTimes(start, loc.lat, loc.lon).polarDay;
+  const stripY = H - padB + 4;
+  const stripH = 16;
+  let sun = '';
+  let segStart = t0;
+  const inside = events.filter((e) => e.t > t0 && e.t < t1);
+  [...inside, { t: t1, end: true }].forEach((e) => {
+    const xa = xt(segStart);
+    const xb = xt(e.t);
+    const w = xb - xa;
+    const cls = isDay ? 'sun-day' : 'sun-night';
+    sun += `<rect class="${cls}" x="${xa}" y="${stripY}" width="${Math.max(0, w)}" height="${stripH}"><title>${isDay ? 'Den' : 'Noc'} ${fmtTime(segStart)}–${fmtTime(e.t)}</title></rect>`;
+    if (w > 26) sun += `<text x="${(xa + xb) / 2}" y="${stripY + 12}" text-anchor="middle" class="sun-icon">${isDay ? '☀️' : '🌙'}</text>`;
+    if (!e.end) {
+      // Okamžik východu/západu: svislá čára přes graf a čas v pásu
+      sun += `<line class="${e.day ? 'sunrise' : 'sunset'}" x1="${xb}" x2="${xb}" y1="${padT - 10}" y2="${stripY + stripH}"/>`;
+      if (!narrow) sun += `<text x="${xb + 4}" y="${padT - 2}" class="sun-time">${e.day ? 'východ' : 'západ'} ${fmtTime(e.t)}</text>`;
+      isDay = e.day;
+      segStart = e.t;
     }
   });
 
@@ -516,7 +559,7 @@ function renderChart(data, tz) {
     const h = Number(k.slice(11));
     if (h % labelEvery === 0) {
       const label = h === 0 ? new Date(`${dayOf(k)}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' }) : `${h}:00`;
-      grid += `<text x="${x(i)}" y="${H - padB + 18}" text-anchor="middle" class="${h === 0 ? 'day-mark' : ''}">${label}</text>`;
+      grid += `<text x="${x(i)}" y="${H - padB + 38}" text-anchor="middle" class="${h === 0 ? 'day-mark' : ''}">${label}</text>`;
     }
   });
 
@@ -569,7 +612,7 @@ function renderChart(data, tz) {
           ${tempStops(tMax, tMin, 0.28, 0.03)}
         </linearGradient>
       </defs>
-      ${night}${grid}
+      ${grid}${sun}
       <line class="axis" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>
       ${rainBars}
       ${area ? `<path d="${area}" fill="url(#temp-fill)"/>` : ''}
@@ -834,7 +877,7 @@ async function show(loc) {
   const region = chmi.status === 'fulfilled' ? findRegion(chmi.value, loc) : null;
 
   renderNow(loc, data, region, tz);
-  renderChart(data, tz);
+  renderChart(data, tz, loc);
   renderDays(data, tz);
   renderChmi(chmi.value, region, chmi.status === 'rejected');
 
