@@ -313,3 +313,18 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .chart .day-span { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: .6; }
 .chart .day-name-label { fill: var(--text); font-size: 13px; font-weight: 700; }
 .chart .day-date { fill: var(--muted); font-size: 11px; font-weight: 400; }
+
+/* Srážky v grafu na 48 hodin */
+.chart .rain-bar { fill: #3b82f6; opacity: .85; }
+.chart .rain-sum {
+  fill: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  .chart .rain-bar { fill: #60a5fa; }
+  .chart .rain-sum { fill: #93c5fd; }
+}

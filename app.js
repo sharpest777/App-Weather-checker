@@ -842,15 +842,29 @@ function renderChart(data, tz, loc) {
     grid += `<text x="${(xa + xb) / 2}" y="${yLine + 15}" text-anchor="middle" class="day-name-label">${DAY_NAMES[n]}${narrow ? '' : ` <tspan class="day-date">${date}</tspan>`}</text>`;
   });
 
-  // Srážky (CZ, jinak NOR) jako sloupce v dolním pásu, 5 mm/h = plná výška
+  // Srážky (CZ, jinak NOR) jako modré sloupce nad pásem den/noc. Výška roste s odmocninou,
+  // aby byl vidět i slabý déšť (5 mm/h = plná výška). Nad každou souvislou přeháňkou součet v mm.
   const rain = rainSource(data, keys[0]);
   $('#rain-legend').textContent = `srážky (${rain.label})`;
-  const rainBars = keys.map((k, i) => {
-    const r = rain.hourly(k);
-    if (!r || r < 0.05) return '';
-    const h = Math.max(2, Math.min(rainH - 4, (r / 5) * (rainH - 4)));
-    return `<rect x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" rx="${Math.min(2, barW / 2)}" fill="var(--c-rain)"><title>${fmtRain(r)}/h</title></rect>`;
+  const barMax = rainH - 16; // nahoře místo na popisek
+  const barH = (r) => Math.max(4, Math.min(barMax, Math.sqrt(r / 5) * barMax));
+  const vals = keys.map((k) => rain.hourly(k) ?? 0);
+  let rainBars = vals.map((r, i) => {
+    if (r < 0.1) return '';
+    const h = barH(r);
+    return `<rect class="rain-bar" x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" rx="${Math.min(2, barW / 2)}"><title>${fmtRain(r)} za hodinu</title></rect>`;
   }).join('');
+  // Souvislé úseky deště (hodiny s aspoň 0,1 mm) → popisek se součtem nad nejvyšším sloupcem
+  for (let i = 0; i < vals.length; i++) {
+    if (vals[i] < 0.1) continue;
+    let j = i;
+    let sum = 0;
+    while (j < vals.length && vals[j] >= 0.1) sum += vals[j++];
+    const top = Math.max(...vals.slice(i, j).map(barH));
+    const cx = Math.min(Math.max((x(i) + x(j - 1)) / 2, padL + 16), W - padR - 16);
+    rainBars += `<text x="${cx}" y="${H - padB - top - 4}" text-anchor="middle" class="rain-sum">${fmtRain(sum)}</text>`;
+    i = j;
+  }
 
   // Jedna křivka průměrné teploty s výplní pod ní
   const avgPts = avgT.map((t, i) => (t == null ? null : [x(i), y(t)]));
