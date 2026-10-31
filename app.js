@@ -856,21 +856,21 @@ function renderChart(data, tz, loc) {
   // Srážky (CZ, jinak NOR) jako modré sloupce nad pásem den/noc. Výška roste s odmocninou,
   // aby byl vidět i slabý déšť (5 mm/h = plná výška). Nad každou souvislou přeháňkou součet v mm.
   const rain = rainSource(data, keys[0]);
-  $('#rain-legend').textContent = `srážky (${rain.label})`;
   const barMax = rainH - 16; // nahoře místo na popisek
   const barH = (r) => Math.max(4, Math.min(barMax, Math.sqrt(r / 5) * barMax));
   const vals = keys.map((k) => rain.hourly(k) ?? 0);
+  $('#rain-legend').textContent = vals.some((r) => r >= RAIN_HOUR_MIN) ? 'Srážky' : 'Beze srážek';
   let rainBars = vals.map((r, i) => {
-    if (r < 0.1) return '';
+    if (r < RAIN_HOUR_MIN) return '';
     const h = barH(r);
     return `<rect class="rain-bar" x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" rx="${Math.min(2, barW / 2)}"><title>${fmtRain(r)} za hodinu</title></rect>`;
   }).join('');
   // Souvislé úseky deště (hodiny s aspoň 0,1 mm) → popisek se součtem nad nejvyšším sloupcem
   for (let i = 0; i < vals.length; i++) {
-    if (vals[i] < 0.1) continue;
+    if (vals[i] < RAIN_HOUR_MIN) continue;
     let j = i;
     let sum = 0;
-    while (j < vals.length && vals[j] >= 0.1) sum += vals[j++];
+    while (j < vals.length && vals[j] >= RAIN_HOUR_MIN) sum += vals[j++];
     const top = Math.max(...vals.slice(i, j).map(barH));
     const cx = Math.min(Math.max((x(i) + x(j - 1)) / 2, padL + 16), W - padR - 16);
     rainBars += `<text x="${cx}" y="${H - padB - top - 4}" text-anchor="middle" class="rain-sum">${fmtRain(sum)}</text>`;
@@ -979,6 +979,24 @@ function smoothPath(points) {
 
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+// Hodina se počítá jako deštivá od 0,1 mm (stejně ve sloupcích grafu i v součtech dnů)
+const RAIN_HOUR_MIN = 0.1;
+
+// Součet srážek za den z hodinových dat hlavního zdroje (jen deštivé hodiny).
+// Vrací null, když zdroj nemá aspoň 20 hodin toho dne.
+function hourlyRainSum(data, day) {
+  const rain = rainSource(data, `${day}T12`);
+  let sum = 0;
+  let hours = 0;
+  for (let h = 0; h < 24; h++) {
+    const r = rain.hourly(`${day}T${String(h).padStart(2, '0')}`);
+    if (r == null) continue;
+    hours += 1;
+    if (r >= RAIN_HOUR_MIN) sum += r;
+  }
+  return hours >= 20 ? sum : null;
+}
+
 // Průměr všech zdrojů pro jeden den: nejvyšší a nejnižší teplota, srážky a jedna ikona
 function averageDay(data, day, today) {
   const ds = SOURCES
@@ -989,7 +1007,9 @@ function averageDay(data, day, today) {
   if (!ds.length) return null;
   const max = avg(ds.map((d) => d.max));
   const min = avg(ds.map((d) => d.min));
-  const rain = avg(ds.map((d) => d.rain || 0));
+  // Srážky ze stejných hodinových dat jako graf „Dnes a zítra“, aby si grafy neodporovaly;
+  // kde hlavní zdroj den celý nepokrývá, průměr denních součtů všech zdrojů
+  const rain = hourlyRainSum(data, day) ?? avg(ds.map((d) => d.rain || 0));
 
   // Ikona: při průměrných srážkách aspoň 1 mm déšť (sníh), jinak nejčastější ikona mezi zdroji
   let symbol;
