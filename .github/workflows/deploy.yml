@@ -45,7 +45,8 @@ jobs:
           path: |
             data/aladin.json
             data/aladin-debug.json
-          key: aladin-${{ steps.aladin-run.outputs.run }}
+          # Při změně skriptu se běh zpracuje znovu
+          key: aladin-${{ steps.aladin-run.outputs.run }}-${{ hashFiles('scripts/fetch_aladin.py') }}
 
       - name: Zpracovat model ALADIN (ČHMÚ)
         if: steps.aladin-run.outputs.run != '' && steps.aladin-cache.outputs.cache-hit != 'true'

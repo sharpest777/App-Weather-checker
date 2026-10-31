@@ -114,7 +114,72 @@ async function loadChmi() {
   return chmiCache;
 }
 
+// Model ALADIN (ČHMÚ) pro okresní města – zpracovává ho GitHub Action do data/aladin.json
+let aladinCache = null;
+async function loadAladin() {
+  if (!aladinCache) aladinCache = getJson(`data/aladin.json?t=${Date.now()}`).catch((e) => { aladinCache = null; throw e; });
+  return aladinCache;
+}
+
 // ---------- Převod dat do společné podoby ----------
+
+// Symbol z oblačnosti (0–1) a srážek – ALADIN vlastní symboly počasí nemá
+function aladinSymbol(cloud, rain, temp, night) {
+  if (rain >= 0.1) return temp <= 0 ? { emoji: '🌨️', text: 'sněžení' } : rain >= 2.5 ? { emoji: '🌧️', text: 'déšť' } : { emoji: '🌦️', text: 'slabý déšť' };
+  if (cloud == null) return { emoji: '', text: '' };
+  if (cloud < 0.2) return { emoji: night ? '🌙' : '☀️', text: 'jasno' };
+  if (cloud < 0.5) return { emoji: night ? '🌙' : '🌤️', text: 'skoro jasno' };
+  if (cloud < 0.8) return { emoji: '⛅', text: 'polojasno' };
+  return { emoji: '☁️', text: 'zataženo' };
+}
+
+// Nejbližší okresní město do 20 km od místa; dál už by předpověď neodpovídala
+const ALADIN_MAX_KM = 20;
+function normalizeAladin(json, loc, tz) {
+  let best = null;
+  let bestKm = Infinity;
+  for (const p of json.points) {
+    const dx = (p.lon - loc.lon) * Math.cos((loc.lat * Math.PI) / 180) * 111;
+    const dy = (p.lat - loc.lat) * 111;
+    const km = Math.hypot(dx, dy);
+    if (km < bestKm) { best = p; bestKm = km; }
+  }
+  if (!best || bestKm > ALADIN_MAX_KM) return null;
+
+  const hourly = new Map();
+  const daily = new Map();
+  json.times.forEach((iso, i) => {
+    const key = hourKey(new Date(iso), tz);
+    const h = Number(key.slice(11));
+    const night = h < 6 || h >= 20;
+    const temp = best.t[i];
+    hourly.set(key, {
+      temp, rain: best.p[i], wind: best.w[i], dir: best.d[i],
+      symbol: aladinSymbol(best.c[i], best.p[i], temp, night),
+    });
+    if (temp == null) return;
+    const day = dayOf(key);
+    const d = daily.get(day) || { max: -Infinity, min: Infinity, rain: 0, hours: 0, clouds: [] };
+    d.max = Math.max(d.max, temp);
+    d.min = Math.min(d.min, temp);
+    d.rain += best.p[i] || 0;
+    d.hours += 1;
+    if (h >= 9 && h <= 18 && best.c[i] != null) d.clouds.push(best.c[i]);
+    daily.set(day, d);
+  });
+
+  const today = dayOf(hourKey(new Date(), tz));
+  for (const [day, d] of daily) {
+    // Neúplný poslední den by ukazoval zkreslené maximum a minimum – vynechat (dnešek nechat)
+    if (day !== today && d.hours < 18) { daily.delete(day); continue; }
+    const cloud = d.clouds.length ? d.clouds.reduce((a, b) => a + b, 0) / d.clouds.length : null;
+    // Den s aspoň 1 mm srážek dostane symbol deště (od 10 mm silného), jinak podle oblačnosti přes den
+    d.symbol = d.rain >= 1
+      ? (d.rain >= 10 ? { emoji: '🌧️', text: 'déšť' } : { emoji: '🌦️', text: 'přeháňky' })
+      : aladinSymbol(cloud, 0, d.max, false);
+  }
+  return { hourly, daily, point: best.name };
+}
 
 // Vrátí { hourly: Map(klíč hodiny -> {temp, rain, wind, symbol}), daily: Map(datum -> {max, min, rain, symbol}) }
 function normalizeYr(series, tz) {
@@ -204,6 +269,7 @@ function findRegion(chmi, loc) {
 
 // Popisky podle toho, odkud předpověď pochází
 const SOURCES = [
+  { id: 'cz', label: 'CZ', title: 'Český hydrometeorologický ústav (ČHMÚ), model ALADIN 1 km' },
   { id: 'yr', label: 'NOR', title: 'Norský meteorologický ústav (MET Norway), yr.no' },
   { id: 'icon', label: 'GER', title: 'Německá meteorologická služba (DWD), model ICON' },
   { id: 'ecmwf', label: 'EU', title: 'Evropské centrum pro střednědobé předpovědi (ECMWF)' },
@@ -314,7 +380,7 @@ function renderNow(loc, data, region, tz) {
   const main = cur.yr || cur.icon || cur.ecmwf;
   // Denní maximum z modelů s celým dnem (yr.no má pro dnešek jen zbývající hodiny)
   const today = dayOf(key);
-  const dayMax = [data.icon, data.ecmwf, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
+  const dayMax = [data.icon, data.ecmwf, data.cz, data.yr].map((d) => d?.daily.get(today)?.max).find((t) => Number.isFinite(t));
   const regionName = region && regionLabel(region) !== loc.name ? regionLabel(region) : '';
 
   const temps = SOURCES.map((s) => cur[s.id]?.temp).filter((t) => t != null);
@@ -548,11 +614,12 @@ async function show(loc) {
   $('#now').innerHTML = `<p class="muted">Načítám ${esc(loc.name)}…</p>`;
   moveRadar(loc);
 
-  const [yr, om, chmi] = await Promise.allSettled([loadYr(loc), loadOpenMeteo(loc), loadChmi()]);
+  const [yr, om, chmi, aladin] = await Promise.allSettled([loadYr(loc), loadOpenMeteo(loc), loadChmi(), loadAladin()]);
   if (loc !== currentLoc) return; // mezitím si uživatel vybral jiné místo
 
   const tz = om.status === 'fulfilled' ? om.value.timezone : 'Europe/Prague';
   const data = {
+    cz: aladin.status === 'fulfilled' ? normalizeAladin(aladin.value, loc, tz) : null,
     yr: yr.status === 'fulfilled' ? normalizeYr(yr.value, tz) : null,
     icon: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.icon) : null,
     ecmwf: om.status === 'fulfilled' ? normalizeOpenMeteo(om.value, OM_MODELS.ecmwf) : null,
@@ -621,7 +688,7 @@ function setupGeo() {
 
 function init() {
   document.querySelectorAll('.chip[data-city]').forEach((b) => b.addEventListener('click', () => show(CITIES[b.dataset.city])));
-  $('#refresh').addEventListener('click', () => { chmiCache = null; loadRadarFrames(); show(currentLoc); });
+  $('#refresh').addEventListener('click', () => { chmiCache = null; aladinCache = null; loadRadarFrames(); show(currentLoc); });
   initRadar();
   loadRadarFrames();
   setupSearch();

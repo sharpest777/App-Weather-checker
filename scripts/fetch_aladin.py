@@ -14,6 +14,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -75,7 +76,15 @@ def latest_run():
 
 def geocode(name):
     q = urllib.parse.urlencode({'name': name, 'count': 5, 'language': 'cs', 'countryCode': 'CZ'})
-    data = json.loads(fetch('https://geocoding-api.open-meteo.com/v1/search?' + q, timeout=30))
+    # Při rychlé sérii dotazů geocoding občas odmítne odpovědět – zkusit znovu s pauzou
+    for attempt in range(3):
+        try:
+            data = json.loads(fetch('https://geocoding-api.open-meteo.com/v1/search?' + q, timeout=30))
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(2 + attempt * 3)
     for r in data.get('results', []):
         if r.get('feature_code', '').startswith('PPL'):
             return r['latitude'], r['longitude']
@@ -104,6 +113,7 @@ def main(out_path, debug_path=None):
     print(f'Běh modelu {run} (složka {hour})')
 
     points = []
+    missing = []
     for name in CITIES:
         try:
             pos = geocode(name)
@@ -112,6 +122,9 @@ def main(out_path, debug_path=None):
             pos = None
         if pos:
             points.append({'name': name, 'lat': pos[0], 'lon': pos[1]})
+        else:
+            missing.append(name)
+        time.sleep(0.3)
     print(f'Dohledáno {len(points)} z {len(CITIES)} měst')
 
     debug = {'run': run, 'fields': {}}
@@ -142,6 +155,8 @@ def main(out_path, debug_path=None):
                                 if np.sqrt(d2[i]) * 111 <= 3:  # do 3 km, jinak město leží mimo mřížku
                                     idx.append(i)
                                     keep.append(p)
+                                else:
+                                    missing.append(p['name'] + ' (mimo mřížku)')
                             points = keep
                             idx = np.array(idx)
                             debug['grid'] = {
@@ -187,16 +202,17 @@ def main(out_path, debug_path=None):
         if t is not None and np.nanmean(t) > 150:
             t = t - 273.15  # kelviny na °C
 
-        # Srážky: akumulace od začátku běhu -> rozdíl proti předchozímu kroku
+        # Srážky: SURFPREC_TOTAL je součet od začátku běhu (GRIB ho sice označuje jako „instant“,
+        # ale hodnoty jen rostou) -> hodinový úhrn = rozdíl proti předchozímu kroku.
+        # Krok 0 srážky nemá; drobné záporné rozdíly a šum pod 0,05 mm jsou z komprese dat.
         rain = None
         if row['p']:
-            vals, step_type, start = row['p']
-            if step_type == 'accum' and start == 0:
-                rain = vals - prev_accum if prev_accum is not None else vals
-                prev_accum = vals
-            else:
-                rain = vals
-            rain = np.clip(rain, 0, None)
+            vals = row['p'][0]
+            rain = vals - prev_accum if prev_accum is not None else vals
+            prev_accum = vals
+            rain = np.where(rain < 0.05, 0, rain)
+        elif when == times[0]:
+            rain = np.zeros(len(out_points))
 
         cloud = row['c'][0] if row['c'] else None
         if cloud is not None and np.nanmax(cloud) > 1.5:
@@ -222,6 +238,7 @@ def main(out_path, debug_path=None):
 
     if debug_path:
         debug['times'] = [result['times'][0], result['times'][-1]] if times else []
+        debug['missing'] = missing
         Path(debug_path).write_text(json.dumps(debug, ensure_ascii=False, indent=1), encoding='utf-8')
 
 
