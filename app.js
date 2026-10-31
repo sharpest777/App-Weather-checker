@@ -194,7 +194,7 @@ function normalizeYr(series, tz) {
     const key = hourKey(s.time, tz);
     hourly.set(key, {
       temp: s.temp, rain: s.rain1 ?? null, wind: s.wind, dir: s.dir,
-      cloud: s.cloud == null ? null : s.cloud / 100, symbol: yrSymbol(s.symbol),
+      cloud: s.cloud == null ? null : s.cloud / 100, symbol: yrSymbol(s.symbol), code: s.symbol,
     });
 
     const day = dayOf(key);
@@ -232,6 +232,7 @@ function normalizeOpenMeteo(om, model) {
       wind: h[`wind_speed_10m_${model}`][i],
       dir: h[`wind_direction_10m_${model}`][i],
       symbol: wmoSymbol(h[`weather_code_${model}`][i]),
+      code: h[`weather_code_${model}`][i],
     });
   });
   const d = om.daily;
@@ -346,6 +347,49 @@ const SNOWS = [
 // Sněží, když to říká symbol počasí (yr.no), nebo když je při srážkách teplota do 0,5 °C
 const isSnow = (cur) => cur?.symbol?.emoji === '🌨️' || (cur?.temp != null && cur.temp <= 0.5);
 const RAIN_SOON_HOURS = 6; // na kolik hodin dopředu hlídat déšť kvůli deštníku
+
+// ---------- Varování před bouřkami ----------
+
+const STORM_HOURS = 12; // na kolik hodin dopředu hlídat bouřky
+const STORMS = [
+  null,
+  { level: 1, label: 'Možné slabé bouřky', icon: '⚡' },
+  { level: 2, label: 'Bouřky', icon: '⚡⚡' },
+  { level: 3, label: 'Silné bouřky', icon: '⚡⚡⚡' },
+];
+
+// Úroveň bouřek v příštích hodinách:
+// NOR (yr.no) „light…thunder“ = 1, „…thunder“ = 2, „heavy…thunder“ = 3;
+// GER/EU kód 95 (bouřka) u jednoho modelu = 1, u obou = 2, kód 96/99 (bouřka s kroupami) = 3
+function stormLevel(data, tz) {
+  let level = 0;
+  let first = null;
+  let hail = false;
+  for (let i = 0; i < STORM_HOURS; i++) {
+    const t = Date.now() + i * 3600e3;
+    const key = hourKey(new Date(t), tz);
+    let lvl = 0;
+    const yrCode = data.yr?.hourly.get(key)?.code || '';
+    if (yrCode.includes('thunder')) lvl = yrCode.startsWith('heavy') ? 3 : yrCode.startsWith('light') ? 1 : 2;
+    const codes = [data.icon, data.ecmwf].map((d) => d?.hourly.get(key)?.code);
+    if (codes.some((c) => c === 96 || c === 99)) { lvl = 3; hail = true; }
+    else lvl = Math.max(lvl, Math.min(2, codes.filter((c) => c === 95).length));
+    if (lvl && first == null) first = t;
+    level = Math.max(level, lvl);
+  }
+  return level ? { ...STORMS[level], from: first, hail } : null;
+}
+
+function renderStorm(storm, tz) {
+  if (!storm) return '';
+  const when = storm.from - Date.now() < 3600e3
+    ? 'právě teď'
+    : `od ${new Date(storm.from).toLocaleTimeString('cs-CZ', { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
+  return `<div class="storm storm-${storm.level}" role="alert">
+    <span class="storm-icon" aria-hidden="true">${storm.icon}</span>
+    <span><strong>${storm.label}</strong>${storm.hail ? ' s kroupami' : ''} <span class="storm-when">${when}</span></span>
+  </div>`;
+}
 
 // Oblačnost (podíl oblohy 0–1): jasno do 30 %, polojasno do 70 %, oblačno od 70 %
 const CLOUDS = [
@@ -472,6 +516,7 @@ function renderNow(loc, data, region, tz) {
         </div>
         ${renderGauges(main, dayMax, rain, preferredSource(data, key, 'cloud'))}
       </div>
+      ${renderStorm(stormLevel(data, tz), tz)}
       <div class="models">
         ${SOURCES.map((s) => `<span>${srcTag(s)} ${fmtTemp(cur[s.id]?.temp)}</span>`).join('')}
       </div>
