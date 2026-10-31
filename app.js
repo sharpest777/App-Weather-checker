@@ -1070,6 +1070,16 @@ function renderDays(data, tz) {
   $('#days').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Předpověď na ${days.length} dní">${svg}</svg>`;
 }
 
+// Zvýrazní v textu ČHMÚ číselné údaje i s jednotkou a rozsahem („7 až 10 °C“, „0 až 3 mm“, „2 až 6 m/s“).
+// Barva podle veličiny: teplota oranžově, srážky a sníh modře, vítr tyrkysově, výška šedě.
+// ČHMÚ píše mezi číslo a jednotku nezlomitelnou mezeru, proto [\s ].
+const NUM = String.raw`[+−-]?\d+(?:[,.]\d+)?`;
+const NUM_RE = new RegExp(String.raw`(${NUM}(?:[\s ]*(?:až|-|–)[\s ]*${NUM})?)[\s ]*(°C|m/s|km/h|mm|cm|m)(?![\wá-ž])`, 'g');
+const NUM_KIND = { '°C': 'temp', 'm/s': 'wind', 'km/h': 'wind', mm: 'rain', cm: 'rain', m: 'alt' };
+function highlightNumbers(html) {
+  return html.replace(NUM_RE, (all, num, unit) => `<span class="chmi-num ${NUM_KIND[unit]}">${all}</span>`);
+}
+
 function renderChmi(chmi, region, error) {
   const el = $('#chmi');
   if (error) { el.innerHTML = '<p class="muted">Text ČHMÚ se nepodařilo načíst.</p>'; return; }
@@ -1090,7 +1100,7 @@ function renderChmi(chmi, region, error) {
         <div class="chmi-block">
           <h3 class="chmi-day">${new Date(f.start).toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'numeric', timeZone: 'Europe/Prague' })}</h3>
           ${intro ? `<p class="chmi-intro">${esc(intro.text)}</p>` : ''}
-          ${rest.map((it) => `<p>${it.headline ? `<span class="chmi-sub">${esc(it.headline)}</span> ` : ''}${esc(it.text)}</p>`).join('')}
+          ${rest.map((it) => `<p>${it.headline ? `<span class="chmi-sub">${esc(it.headline)}</span> ` : ''}${highlightNumbers(esc(it.text))}</p>`).join('')}
           <p class="chmi-meta muted">Vydáno ${new Date(f.sent).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}${f.author ? ` · ${esc(f.author)}` : ''}</p>
         </div>`;
     }).join('')}

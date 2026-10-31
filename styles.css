@@ -340,3 +340,16 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
   .chart .rain-bar { fill: #60a5fa; }
   .chart .rain-sum { fill: #93c5fd; }
 }
+
+/* Číselné údaje v textu ČHMÚ */
+.chmi-num { font-weight: 700; white-space: nowrap; padding: 0 3px; border-radius: 4px; }
+.chmi-num.temp { color: #c2410c; background: #ffedd5; }
+.chmi-num.rain { color: #1d4ed8; background: #dbeafe; }
+.chmi-num.wind { color: #0f766e; background: #ccfbf1; }
+.chmi-num.alt { color: #475569; background: #e2e8f0; }
+@media (prefers-color-scheme: dark) {
+  .chmi-num.temp { color: #fdba74; background: rgb(194 65 12 / .25); }
+  .chmi-num.rain { color: #93c5fd; background: rgb(29 78 216 / .3); }
+  .chmi-num.wind { color: #5eead4; background: rgb(15 118 110 / .3); }
+  .chmi-num.alt { color: #cbd5e1; background: rgb(71 85 105 / .4); }
+}
