@@ -37,6 +37,7 @@
     <section class="card">
       <h2>Příštích 48 hodin</h2>
       <div class="legend">
+        <span><i class="line avg"></i><strong>průměr</strong></span>
         <span title="Český hydrometeorologický ústav (ČHMÚ), model ALADIN 1 km"><i class="dot cz"></i>CZ</span>
         <span title="Norský meteorologický ústav (MET Norway), yr.no"><i class="dot yr"></i>NOR</span>
         <span title="Německá meteorologická služba (DWD), model ICON"><i class="dot icon"></i>GER</span>
@@ -44,17 +45,6 @@
         <span><i class="bar"></i><span id="rain-legend">srážky</span></span>
       </div>
       <div id="chart" class="chart"></div>
-    </section>
-
-    <section class="card">
-      <h2>Radar srážek</h2>
-      <div id="radar" class="radar" aria-label="Mapa s radarem srážek"></div>
-      <div class="radar-controls">
-        <button type="button" id="radar-play" class="chip" aria-label="Přehrát animaci">▶</button>
-        <input type="range" id="radar-slider" min="0" max="0" value="0" aria-label="Čas snímku">
-        <span id="radar-time" class="radar-time"></span>
-      </div>
-      <p class="radar-note muted">Poslední zhruba 2 hodiny po 10 minutách. Radar: <a href="https://www.rainviewer.com/" rel="noopener">RainViewer</a>, mapa © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>.</p>
     </section>
 
     <section class="card">
@@ -66,6 +56,17 @@
         <span>průměr všech zdrojů</span>
       </div>
       <div id="days" class="chart days-chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>Radar srážek</h2>
+      <div id="radar" class="radar" aria-label="Mapa s radarem srážek"></div>
+      <div class="radar-controls">
+        <button type="button" id="radar-play" class="chip" aria-label="Přehrát animaci">▶</button>
+        <input type="range" id="radar-slider" min="0" max="0" value="0" aria-label="Čas snímku">
+        <span id="radar-time" class="radar-time"></span>
+      </div>
+      <p class="radar-note muted">Poslední zhruba 2 hodiny po 10 minutách. Radar: <a href="https://www.rainviewer.com/" rel="noopener">RainViewer</a>, mapa © <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>.</p>
     </section>
 
     <section class="card">

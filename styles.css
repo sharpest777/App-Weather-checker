@@ -10,6 +10,8 @@
   --c-ecmwf: #059669;
   --c-cz: #dc2626;
   --c-max: #ea580c;
+  --c-avg: #7c3aed;
+  --c-night: rgb(15 23 42 / .04);
   --c-min: #2563eb;
   --c-rain: #93c5fd;
   --c-cloth: #7c3aed;
@@ -33,6 +35,8 @@
     --c-ecmwf: #34d399;
     --c-cz: #f87171;
     --c-max: #fb923c;
+    --c-avg: #c4b5fd;
+    --c-night: rgb(0 0 0 / .18);
     --c-min: #60a5fa;
     --c-rain: #1d4ed8;
     --c-cloth: #7c3aed;
@@ -208,3 +212,14 @@ main { display: grid; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
 .days-chart .t-min { fill: var(--c-min); font-size: 13px; font-weight: 600; }
 .days-chart .rain-label { fill: var(--muted); font-size: 11px; }
 .days-chart .src-count { fill: var(--muted); font-size: 10px; }
+
+/* Graf na 48 hodin */
+.line { display: inline-block; width: 16px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.line.avg { background: var(--c-avg); }
+.chart .night { fill: var(--c-night); }
+.chart .axis { stroke: var(--line); }
+.chart .day-mark { fill: var(--text); font-weight: 600; }
+.chart .src-line { fill: none; stroke-width: 1.4; stroke-opacity: .5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .avg-line { fill: none; stroke: var(--c-avg); stroke-width: 3.2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .avg-dot { fill: var(--card); stroke: var(--c-avg); stroke-width: 2.5; }
+.chart .avg-label { fill: var(--c-avg); font-size: 12px; font-weight: 700; }

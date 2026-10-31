@@ -475,40 +475,38 @@ function renderChart(data, tz) {
   // Graf se kreslí v šířce kontejneru, aby byly popisky čitelné i na mobilu
   const W = Math.max(300, $('#chart').clientWidth || 700);
   const narrow = W < 500;
-  const H = narrow ? 200 : 240, padL = 32, padR = 8, padT = 10, padB = 34;
+  const H = narrow ? 230 : 270, padL = 30, padR = 10, padT = 22, padB = 30;
+  const rainH = 46; // pás pro srážky u spodního okraje
   const labelEvery = narrow ? 12 : 6;
   const barW = Math.max(2, (W - padL - padR) / CHART_HOURS - 2);
-  const temps = [];
-  for (const s of SOURCES) for (const k of keys) { const t = data[s.id]?.hourly.get(k)?.temp; if (t != null) temps.push(t); }
+
+  // Průměr dostupných zdrojů pro každou hodinu
+  const series = keys.map((k) => SOURCES.map((s) => data[s.id]?.hourly.get(k)?.temp).filter((t) => t != null));
+  const avgT = series.map((ts) => (ts.length ? avg(ts) : null));
+  const temps = series.flat();
   if (!temps.length) { $('#chart').innerHTML = '<p class="muted">Data nejsou k dispozici.</p>'; return; }
 
   const tMin = Math.floor(Math.min(...temps)) - 1;
   const tMax = Math.ceil(Math.max(...temps)) + 1;
+  const plotB = H - padB - rainH; // spodní okraj teplotní části
   const x = (i) => padL + (i / (keys.length - 1)) * (W - padL - padR);
-  const y = (t) => padT + (1 - (t - tMin) / (tMax - tMin)) * (H - padT - padB);
+  const y = (t) => padT + (1 - (t - tMin) / (tMax - tMin)) * (plotB - padT);
 
-  // Srážky (CZ, jinak NOR) jako sloupce u spodního okraje, 5 mm = plná výška 60 px
-  const rain = rainSource(data, keys[0]);
-  $('#rain-legend').textContent = `srážky (${rain.label})`;
-  const rainBars = keys.map((k, i) => {
-    const r = rain.hourly(k);
-    if (!r) return '';
-    const h = Math.min(60, (r / 5) * 60);
-    return `<rect x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" fill="var(--c-rain)" rx="1"/>`;
-  }).join('');
+  // Noc (20–6 h) jako jemně podbarvený pruh
+  let night = '';
+  let nightStart = null;
+  keys.forEach((k, i) => {
+    const h = Number(k.slice(11));
+    const isNight = h >= 20 || h < 6;
+    if (isNight && nightStart == null) nightStart = i;
+    if ((!isNight || i === keys.length - 1) && nightStart != null) {
+      const end = isNight ? i : i - 1;
+      night += `<rect class="night" x="${x(nightStart)}" y="${padT - 14}" width="${Math.max(0, x(end) - x(nightStart))}" height="${H - padB - padT + 14}"/>`;
+      nightStart = null;
+    }
+  });
 
-  const lines = SOURCES.map((s) => {
-    let d = '';
-    let pen = false;
-    keys.forEach((k, i) => {
-      const t = data[s.id]?.hourly.get(k)?.temp;
-      if (t == null) { pen = false; return; }
-      d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(t).toFixed(1)}`;
-      pen = true;
-    });
-    return d ? `<path d="${d}" fill="none" stroke="var(--c-${s.id})" stroke-width="2.2" stroke-linejoin="round"/>` : '';
-  }).join('');
-
+  // Mřížka teplot a popisky času
   const step = tMax - tMin > 12 ? 4 : 2;
   let grid = '';
   for (let t = Math.ceil(tMin / step) * step; t <= tMax; t += step) {
@@ -518,12 +516,81 @@ function renderChart(data, tz) {
     const h = Number(k.slice(11));
     if (h % labelEvery === 0) {
       const label = h === 0 ? new Date(`${dayOf(k)}T12:00`).toLocaleDateString('cs-CZ', { weekday: 'short' }) : `${h}:00`;
-      grid += `<line class="grid" x1="${x(i)}" x2="${x(i)}" y1="${padT}" y2="${H - padB}" stroke-dasharray="${h === 0 ? '' : '2 4'}"/>
-               <text x="${x(i)}" y="${H - padB + 16}" text-anchor="middle">${label}</text>`;
+      grid += `<text x="${x(i)}" y="${H - padB + 18}" text-anchor="middle" class="${h === 0 ? 'day-mark' : ''}">${label}</text>`;
     }
   });
 
-  $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graf teploty na 48 hodin">${grid}${rainBars}${lines}</svg>`;
+  // Srážky (CZ, jinak NOR) jako sloupce v dolním pásu, 5 mm/h = plná výška
+  const rain = rainSource(data, keys[0]);
+  $('#rain-legend').textContent = `srážky (${rain.label})`;
+  const rainBars = keys.map((k, i) => {
+    const r = rain.hourly(k);
+    if (!r || r < 0.05) return '';
+    const h = Math.max(2, Math.min(rainH - 4, (r / 5) * (rainH - 4)));
+    return `<rect x="${x(i) - barW / 2}" y="${H - padB - h}" width="${barW}" height="${h}" rx="${Math.min(2, barW / 2)}" fill="var(--c-rain)"><title>${fmtRain(r)}/h</title></rect>`;
+  }).join('');
+
+  // Jednotlivé zdroje tence a průhledně, průměr výrazně s výplní pod křivkou
+  const pts = (vals) => vals.map((t, i) => (t == null ? null : [x(i), y(t)]));
+  const lines = SOURCES.map((s) => {
+    const d = smoothPath(pts(keys.map((k) => data[s.id]?.hourly.get(k)?.temp ?? null)));
+    return d ? `<path d="${d}" class="src-line" stroke="var(--c-${s.id})"/>` : '';
+  }).join('');
+  const avgPts = pts(avgT);
+  const avgPath = smoothPath(avgPts);
+  const valid = avgPts.filter(Boolean);
+  const area = valid.length > 1
+    ? `${avgPath} L${valid.at(-1)[0].toFixed(1)},${plotB} L${valid[0][0].toFixed(1)},${plotB} Z`
+    : '';
+
+  // Popisky nejteplejší a nejchladnější hodiny průměru
+  const iMax = avgT.reduce((b, t, i) => (t != null && (b < 0 || t > avgT[b]) ? i : b), -1);
+  const iMin = avgT.reduce((b, t, i) => (t != null && (b < 0 || t < avgT[b]) ? i : b), -1);
+  const marks = [[iMax, -10], [iMin, 20]].filter(([i]) => i >= 0).map(([i, dy]) => `
+    <circle cx="${x(i)}" cy="${y(avgT[i])}" r="4" class="avg-dot"/>
+    <text x="${Math.min(Math.max(x(i), padL + 14), W - padR - 14)}" y="${y(avgT[i]) + dy}" text-anchor="middle" class="avg-label">${fmtTemp(avgT[i])}</text>`).join('');
+
+  $('#chart').innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graf teploty na 48 hodin">
+      <defs>
+        <linearGradient id="avg-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="var(--c-avg)" stop-opacity=".28"/>
+          <stop offset="100%" stop-color="var(--c-avg)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${night}${grid}
+      <line class="axis" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>
+      ${rainBars}
+      ${area ? `<path d="${area}" fill="url(#avg-fill)"/>` : ''}
+      ${lines}
+      ${avgPath ? `<path d="${avgPath}" class="avg-line"/>` : ''}
+      ${marks}
+    </svg>`;
+}
+
+// Hladká křivka přes body (Catmull-Rom převedený na Bézierovy oblouky); null přeruší čáru
+function smoothPath(points) {
+  let d = '';
+  let run = [];
+  const flush = () => {
+    if (run.length === 1) d += `M${run[0][0].toFixed(1)},${run[0][1].toFixed(1)}`;
+    if (run.length > 1) {
+      d += `M${run[0][0].toFixed(1)},${run[0][1].toFixed(1)}`;
+      for (let i = 0; i < run.length - 1; i++) {
+        const p0 = run[i - 1] || run[i];
+        const p1 = run[i];
+        const p2 = run[i + 1];
+        const p3 = run[i + 2] || p2;
+        const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+        const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+        d += `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+      }
+    }
+    run = [];
+  };
+  for (const p of points) { if (p) run.push(p); else flush(); }
+  flush();
+  return d;
 }
 
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
