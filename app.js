@@ -374,9 +374,12 @@ function renderGauges(cur, dayMax, rain, cloud) {
     const r = rain.now >= RAINS[0].from ? levelOf(RAINS, rain.now) : null;
     rainHtml = `
       <div class="gauge">
-        <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>
+        ${r
+          ? '<svg class="gauge-icon rain-drop" viewBox="0 0 24 24" aria-label="srážky"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5z"/></svg>'
+          // Bez srážek: přeškrtnutá prázdná kapka
+          : '<svg class="gauge-icon outline dry" viewBox="0 0 24 24" aria-label="sucho"><path d="M12 2.5C9 7 6 10.5 6 14a6 6 0 0 0 12 0c0-3.5-3-7-6-11.5zM4 4l16 16"/></svg>'}
         <div class="gauge-body">
-          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(rain.now)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span> <span class="src ${rain.id}">(${rain.label})</span></div>
+          <div class="gauge-title">Srážky ${r ? `<strong>${fmtRain(rain.now)}/h</strong>` : '<strong>žádné</strong>'} <span class="muted">v příští hodině</span></div>
           ${meter(RAINS, r, '--c-rainmeter')}
         </div>
       </div>`;
@@ -389,7 +392,7 @@ function renderGauges(cur, dayMax, rain, cloud) {
       <div class="gauge">
         <svg class="gauge-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 9.1 4.95 4.95 0 0 1 17.5 19z"/></svg>
         <div class="gauge-body">
-          <div class="gauge-title">Obloha <strong>${c.label.toLowerCase()}</strong> <span class="muted">${Math.round(cloud.now * 100)} % mraků</span> <span class="src ${cloud.id}">(${cloud.label})</span></div>
+          <div class="gauge-title">Obloha <strong>${c.label.toLowerCase()}</strong> <span class="muted">${Math.round(cloud.now * 100)} % mraků</span></div>
           ${meter(CLOUDS, c, '--c-cloud')}
         </div>
       </div>`;
